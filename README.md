@@ -48,4 +48,14 @@ Out of scope for the initial foundation:
 
 ## Current status
 
-The repository currently contains the initial buildable Android foundation only.
+The repository now contains the first Single-first product structure:
+- `single_home`
+- `single_life_wheel`
+- `single_working_set`
+- `single_day_schedule`
+- `single_plan`
+- `single_capture`
+- `single_create`
+- `settings`
+
+These screens are still lightweight, but the flow boundaries are now explicit and ready for iterative product work.
