@@ -3,7 +3,6 @@ package com.struperto.androidappdays.feature.single.home
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -21,7 +20,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -61,7 +59,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.struperto.androidappdays.feature.single.model.SingleHomeState
-import com.struperto.androidappdays.feature.single.model.SingleMetric
 import com.struperto.androidappdays.feature.single.model.SingleMirrorLane
 import com.struperto.androidappdays.feature.single.model.SingleQuickAction
 import com.struperto.androidappdays.navigation.AppDestination
@@ -155,11 +152,6 @@ fun SingleHomeScreen(
             HomeTopBar(
                 modeLabel = state.modeLabel,
                 onOpenSettings = onOpenSettings,
-            )
-            DashboardMetaRow(
-                stageLabel = state.stageLabel,
-                cadenceLabel = state.cadenceLabel,
-                metrics = state.metrics,
             )
             MirrorDashboardCard(
                 stageLabel = state.stageLabel,
@@ -302,52 +294,6 @@ private fun ModePickerPill(
                 onClick = { expanded = false },
             )
         }
-    }
-}
-
-@Composable
-private fun DashboardMetaRow(
-    stageLabel: String,
-    cadenceLabel: String,
-    metrics: List<SingleMetric>,
-) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .horizontalScroll(rememberScrollState()),
-        horizontalArrangement = Arrangement.spacedBy(10.dp),
-    ) {
-        MetaPill(label = stageLabel, value = "Single")
-        MetaPill(label = "Rhythmus", value = cadenceLabel)
-        metrics.forEach { metric ->
-            MetaPill(label = metric.label, value = metric.value)
-        }
-    }
-}
-
-@Composable
-private fun MetaPill(
-    label: String,
-    value: String,
-) {
-    Column(
-        modifier = Modifier
-            .clip(RoundedCornerShape(22.dp))
-            .background(AppTheme.colors.surfaceStrong.copy(alpha = 0.92f))
-            .border(1.dp, AppTheme.colors.outlineSoft.copy(alpha = 0.7f), RoundedCornerShape(22.dp))
-            .padding(horizontal = 14.dp, vertical = 10.dp),
-        verticalArrangement = Arrangement.spacedBy(2.dp),
-    ) {
-        Text(
-            text = label,
-            style = AppTheme.typography.label,
-            color = AppTheme.colors.muted,
-        )
-        Text(
-            text = value,
-            style = AppTheme.typography.body.copy(fontWeight = FontWeight.SemiBold),
-            color = AppTheme.colors.ink,
-        )
     }
 }
 
