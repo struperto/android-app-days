@@ -156,6 +156,7 @@ fun SingleHomeScreen(
                 onOpenSettings = onOpenSettings,
             )
             MirrorDashboardCard(
+                mirrorTitle = state.mirrorTitle,
                 cadenceLabel = state.cadenceLabel,
                 lanes = state.mirrorLanes,
                 modifier = Modifier
@@ -300,6 +301,7 @@ private fun ModePickerPill(
 
 @Composable
 private fun MirrorDashboardCard(
+    mirrorTitle: String,
     cadenceLabel: String,
     lanes: List<SingleMirrorLane>,
     modifier: Modifier = Modifier,
@@ -320,17 +322,17 @@ private fun MirrorDashboardCard(
                 .fillMaxSize()
                 .drawBehind {
                     val centerX = size.width * 0.5f
-                    val glowCenterY = size.height * 0.42f
-                    val topY = size.height * 0.24f
-                    val bottomY = size.height * 0.82f
+                    val glowCenterY = size.height * 0.32f
+                    val topY = size.height * 0.25f
+                    val bottomY = size.height * 0.53f
                     drawCircle(
                         color = accentSoft.copy(alpha = 0.12f),
-                        radius = size.minDimension * 0.34f,
+                        radius = size.minDimension * 0.24f,
                         center = androidx.compose.ui.geometry.Offset(centerX, glowCenterY),
                     )
                     drawCircle(
                         color = Color.White.copy(alpha = 0.52f),
-                        radius = size.minDimension * 0.24f,
+                        radius = size.minDimension * 0.16f,
                         center = androidx.compose.ui.geometry.Offset(centerX, glowCenterY),
                     )
                     drawLine(
@@ -356,36 +358,43 @@ private fun MirrorDashboardCard(
                         }
                     }
                 }
-                .padding(horizontal = 20.dp, vertical = 22.dp),
+                .padding(horizontal = 20.dp, vertical = 18.dp),
         ) {
             Column(
                 modifier = Modifier.fillMaxSize(),
-                verticalArrangement = Arrangement.spacedBy(18.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    DashboardEdgeLabel(label = "SOLL")
+                    DashboardEdgeLabel(label = "Soll")
                     Text(
-                        text = "Dashboard",
+                        text = mirrorTitle,
                         style = AppTheme.typography.title,
                         color = AppTheme.colors.ink,
                     )
-                    DashboardEdgeLabel(label = "IST")
+                    DashboardEdgeLabel(label = "Ist")
                 }
 
                 HorizontalDivider(color = AppTheme.colors.outlineSoft.copy(alpha = 0.75f))
 
-                Column(
+                Box(
                     modifier = Modifier
                         .fillMaxWidth()
                         .weight(1f),
-                    verticalArrangement = Arrangement.SpaceBetween,
+                    contentAlignment = Alignment.TopCenter,
                 ) {
-                    lanes.forEach { lane ->
-                        MirrorLaneRow(lane = lane)
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = 14.dp),
+                        verticalArrangement = Arrangement.spacedBy(10.dp),
+                    ) {
+                        lanes.forEach { lane ->
+                            MirrorLaneRow(lane = lane)
+                        }
                     }
                 }
 
@@ -433,7 +442,7 @@ private fun MirrorLaneRow(
     Row(
         modifier = Modifier.fillMaxWidth(),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
     ) {
         MirrorSideBar(
             value = lane.target,
@@ -469,11 +478,11 @@ private fun LaneLabelChip(
 ) {
     Box(
         modifier = Modifier
-            .width(86.dp)
+            .width(82.dp)
             .clip(RoundedCornerShape(999.dp))
             .background(AppTheme.colors.surfaceStrong.copy(alpha = 0.9f))
             .border(1.dp, AppTheme.colors.outlineSoft.copy(alpha = 0.7f), RoundedCornerShape(999.dp))
-            .padding(horizontal = 10.dp, vertical = 6.dp),
+            .padding(horizontal = 10.dp, vertical = 5.dp),
         contentAlignment = Alignment.Center,
     ) {
         Text(
@@ -495,13 +504,13 @@ private fun MirrorSideBar(
 ) {
     BoxWithConstraints(
         modifier = modifier
-            .height(20.dp)
+            .height(18.dp)
             .clip(RoundedCornerShape(999.dp))
             .background(AppTheme.colors.surface.copy(alpha = 0.92f))
             .border(1.dp, AppTheme.colors.outlineSoft.copy(alpha = 0.45f), RoundedCornerShape(999.dp)),
     ) {
         val fillFraction = value.coerceIn(0f, 1f)
-        val capSize = 10.dp
+        val capSize = 9.dp
         val fillEndOffset = if (mirrored) {
             (maxWidth * (1f - fillFraction)).coerceAtLeast(0.dp)
         } else {

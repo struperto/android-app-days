@@ -20,6 +20,7 @@ data class SingleHomeState(
     val modeLabel: String,
     val stageLabel: String,
     val cadenceLabel: String,
+    val mirrorTitle: String,
     val metrics: List<SingleMetric>,
     val mirrorLanes: List<SingleMirrorLane>,
     val actions: List<SingleQuickAction>,
@@ -30,6 +31,7 @@ fun previewSingleHomeState(): SingleHomeState {
         modeLabel = "Single",
         stageLabel = "Heute",
         cadenceLabel = "08 / 14 / 21",
+        mirrorTitle = "Tagesabgleich",
         metrics = listOf(
             SingleMetric(label = "Fokus", value = "3 Vorhaben"),
             SingleMetric(label = "Capture", value = "1 offen"),
@@ -37,7 +39,7 @@ fun previewSingleHomeState(): SingleHomeState {
             SingleMetric(label = "Flow", value = "68%"),
         ),
         mirrorLanes = listOf(
-            SingleMirrorLane(label = "Koerper", target = 0.62f, actual = 0.46f),
+            SingleMirrorLane(label = "Körper", target = 0.62f, actual = 0.46f),
             SingleMirrorLane(label = "Fokus", target = 0.86f, actual = 0.74f),
             SingleMirrorLane(label = "Arbeit", target = 0.72f, actual = 0.58f),
             SingleMirrorLane(label = "Ordnung", target = 0.54f, actual = 0.69f),

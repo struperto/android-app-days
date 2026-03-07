@@ -11,6 +11,7 @@ class SingleHomeModelTest {
 
         assertEquals("Heute", state.stageLabel)
         assertEquals("Single", state.modeLabel)
+        assertEquals("Tagesabgleich", state.mirrorTitle)
         assertEquals(6, state.actions.size)
         assertEquals(
             listOf(
