@@ -1,6 +1,5 @@
 package com.struperto.androidappdays.feature.single.home
 
-import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -55,7 +54,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
-import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -70,7 +68,7 @@ import com.struperto.androidappdays.ui.theme.AppTheme
 
 private enum class SingleSheet {
     Routes,
-    Assist,
+    Ai,
 }
 
 private data class AiQuickAction(
@@ -93,30 +91,26 @@ fun SingleHomeScreen(
     val aiActions = remember {
         listOf(
             AiQuickAction(
-                title = "Spiegel",
+                title = "Mirror",
                 route = AppDestination.Home.route,
                 icon = Icons.Outlined.SmartToy,
             ),
             AiQuickAction(
-                title = "Heute",
+                title = "Plan",
                 route = AppDestination.Plan.route,
                 icon = Icons.Outlined.TaskAlt,
             ),
             AiQuickAction(
-                title = "Einordnen",
+                title = "Capture",
                 route = AppDestination.Capture.route,
                 icon = Icons.Outlined.PhotoCamera,
             ),
             AiQuickAction(
-                title = "Nächster",
+                title = "Next",
                 route = AppDestination.Create.route,
                 icon = Icons.Outlined.Timeline,
             ),
         )
-    }
-
-    BackHandler(enabled = activeSheet != null) {
-        activeSheet = null
     }
 
     Box(
@@ -154,7 +148,7 @@ fun SingleHomeScreen(
                 .fillMaxSize()
                 .statusBarsPadding()
                 .padding(horizontal = AppTheme.dimensions.screenPadding, vertical = 16.dp)
-                .padding(bottom = 126.dp),
+                .padding(bottom = 110.dp),
             verticalArrangement = Arrangement.spacedBy(18.dp),
         ) {
             HomeTopBar(
@@ -173,7 +167,7 @@ fun SingleHomeScreen(
 
         BottomDockRow(
             onOpenRoutes = { activeSheet = SingleSheet.Routes },
-            onOpenAi = { activeSheet = SingleSheet.Assist },
+            onOpenAi = { activeSheet = SingleSheet.Ai },
             modifier = Modifier
                 .align(Alignment.BottomCenter)
                 .fillMaxWidth()
@@ -210,7 +204,7 @@ fun SingleHomeScreen(
                         onOpenAction(route)
                     },
                 )
-                SingleSheet.Assist -> LocalAiSheet(
+                SingleSheet.Ai -> LocalAiSheet(
                     actions = aiActions,
                     onOpenAction = { route ->
                         activeSheet = null
@@ -297,7 +291,7 @@ private fun ModePickerPill(
                 onClick = { expanded = false },
             )
             DropdownMenuItem(
-                text = { Text("Assist") },
+                text = { Text("Coworker") },
                 enabled = false,
                 onClick = { expanded = false },
             )
@@ -566,44 +560,27 @@ private fun BottomDockRow(
     onOpenAi: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    Box(
-        modifier = modifier.height(126.dp),
+    Row(
+        modifier = modifier,
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.Bottom,
     ) {
-        DockBridgeShell(
-            modifier = Modifier
-                .align(Alignment.BottomCenter)
-                .fillMaxWidth()
-                .height(86.dp),
-        )
-        DockCoreSignal(
-            modifier = Modifier
-                .align(Alignment.BottomCenter)
-                .offset(y = (-10).dp),
-        )
         OrbitDockButton(
             icon = Icons.Outlined.Add,
-            contentDescription = "Kernaktionen",
+            contentDescription = "Kernrouten",
             orbitColor = AppTheme.colors.accentSoft.copy(alpha = 0.85f),
             buttonColor = AppTheme.colors.surfaceStrong,
             iconTint = AppTheme.colors.ink,
-            size = 68.dp,
-            modifier = Modifier
-                .align(Alignment.BottomStart)
-                .padding(start = 10.dp, bottom = 8.dp)
-                .offset(y = (-10).dp),
+            size = 66.dp,
             onClick = onOpenRoutes,
         )
         OrbitDockButton(
             icon = Icons.Outlined.SmartToy,
-            contentDescription = "Assist",
-            orbitColor = AppTheme.colors.accent.copy(alpha = 0.16f),
+            contentDescription = "Lokale AI",
+            orbitColor = AppTheme.colors.outlineSoft.copy(alpha = 0.95f),
             buttonColor = AppTheme.colors.surfaceStrong,
             iconTint = AppTheme.colors.accent,
             size = 58.dp,
-            modifier = Modifier
-                .align(Alignment.BottomEnd)
-                .padding(end = 12.dp, bottom = 10.dp)
-                .offset(y = (-8).dp),
             onClick = onOpenAi,
         )
     }
@@ -617,12 +594,11 @@ private fun OrbitDockButton(
     buttonColor: Color,
     iconTint: Color,
     size: androidx.compose.ui.unit.Dp,
-    modifier: Modifier = Modifier,
     onClick: () -> Unit,
 ) {
     val shape = CircleShape
     Box(
-        modifier = modifier
+        modifier = Modifier
             .size(size + 10.dp)
             .clip(shape)
             .background(orbitColor.copy(alpha = 0.45f)),
@@ -637,12 +613,6 @@ private fun OrbitDockButton(
                 .clickable(onClick = onClick),
             contentAlignment = Alignment.Center,
         ) {
-            Box(
-                modifier = Modifier
-                    .size(size - 16.dp)
-                    .clip(shape)
-                    .background(orbitColor.copy(alpha = 0.18f)),
-            )
             Icon(
                 imageVector = icon,
                 contentDescription = contentDescription,
@@ -654,109 +624,12 @@ private fun OrbitDockButton(
 }
 
 @Composable
-private fun DockBridgeShell(
-    modifier: Modifier = Modifier,
-) {
-    val surfaceStrong = AppTheme.colors.surfaceStrong
-    val outlineSoft = AppTheme.colors.outlineSoft
-    val accentSoft = AppTheme.colors.accentSoft
-    Box(
-        modifier = modifier
-            .clip(RoundedCornerShape(34.dp))
-            .background(surfaceStrong.copy(alpha = 0.95f))
-            .border(1.dp, outlineSoft.copy(alpha = 0.78f), RoundedCornerShape(34.dp))
-            .drawBehind {
-                val centerY = size.height * 0.58f
-                val leftGlowX = size.width * 0.18f
-                val rightGlowX = size.width * 0.82f
-
-                drawCircle(
-                    color = accentSoft.copy(alpha = 0.18f),
-                    radius = size.height * 0.92f,
-                    center = androidx.compose.ui.geometry.Offset(leftGlowX, centerY),
-                )
-                drawCircle(
-                    color = outlineSoft.copy(alpha = 0.18f),
-                    radius = size.height * 0.88f,
-                    center = androidx.compose.ui.geometry.Offset(rightGlowX, centerY),
-                )
-                drawRoundRect(
-                    brush = Brush.horizontalGradient(
-                        colors = listOf(
-                            accentSoft.copy(alpha = 0.72f),
-                            surfaceStrong.copy(alpha = 0.2f),
-                            outlineSoft.copy(alpha = 0.6f),
-                        ),
-                    ),
-                    topLeft = androidx.compose.ui.geometry.Offset(
-                        x = size.width * 0.22f,
-                        y = centerY,
-                    ),
-                    size = androidx.compose.ui.geometry.Size(
-                        width = size.width * 0.56f,
-                        height = 2.dp.toPx(),
-                    ),
-                    cornerRadius = CornerRadius(999f, 999f),
-                )
-                drawRoundRect(
-                    color = outlineSoft.copy(alpha = 0.38f),
-                    topLeft = androidx.compose.ui.geometry.Offset(
-                        x = size.width * 0.36f,
-                        y = size.height * 0.22f,
-                    ),
-                    size = androidx.compose.ui.geometry.Size(
-                        width = size.width * 0.28f,
-                        height = 1.dp.toPx(),
-                    ),
-                    cornerRadius = CornerRadius(999f, 999f),
-                )
-            },
-    )
-}
-
-@Composable
-private fun DockCoreSignal(
-    modifier: Modifier = Modifier,
-) {
-    Box(
-        modifier = modifier
-            .width(58.dp)
-            .height(70.dp)
-            .clip(RoundedCornerShape(24.dp))
-            .background(AppTheme.colors.surfaceStrong.copy(alpha = 0.98f))
-            .border(1.dp, AppTheme.colors.outlineSoft.copy(alpha = 0.82f), RoundedCornerShape(24.dp)),
-        contentAlignment = Alignment.Center,
-    ) {
-        Column(
-            verticalArrangement = Arrangement.spacedBy(8.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-        ) {
-            Box(
-                modifier = Modifier
-                    .width(18.dp)
-                    .height(2.dp)
-                    .clip(RoundedCornerShape(999.dp))
-                    .background(AppTheme.colors.outlineSoft.copy(alpha = 0.9f)),
-            )
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(5.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                MiniStatusDot(color = AppTheme.colors.outlineSoft.copy(alpha = 0.75f))
-                MiniStatusDot(color = AppTheme.colors.accent)
-                MiniStatusDot(color = AppTheme.colors.outlineSoft.copy(alpha = 0.75f))
-            }
-        }
-    }
-}
-
-@Composable
 private fun RoutesSheet(
     actions: List<SingleQuickAction>,
     onOpenAction: (String) -> Unit,
 ) {
     SheetFrame(
-        title = "Kernaktionen",
+        title = "Kernrouten",
         subtitle = "Single",
     ) {
         actions.chunked(3).forEach { rowActions ->
@@ -786,8 +659,8 @@ private fun LocalAiSheet(
     onOpenAction: (String) -> Unit,
 ) {
     SheetFrame(
-        title = "Assist",
-        subtitle = "lokal",
+        title = "Lokale AI",
+        subtitle = "on-device shell",
     ) {
         actions.chunked(2).forEach { rowActions ->
             Row(
