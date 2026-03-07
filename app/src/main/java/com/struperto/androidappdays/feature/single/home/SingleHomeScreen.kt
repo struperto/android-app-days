@@ -5,7 +5,9 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -154,7 +156,6 @@ fun SingleHomeScreen(
                 onOpenSettings = onOpenSettings,
             )
             MirrorDashboardCard(
-                stageLabel = state.stageLabel,
                 cadenceLabel = state.cadenceLabel,
                 lanes = state.mirrorLanes,
                 modifier = Modifier
@@ -299,11 +300,14 @@ private fun ModePickerPill(
 
 @Composable
 private fun MirrorDashboardCard(
-    stageLabel: String,
     cadenceLabel: String,
     lanes: List<SingleMirrorLane>,
     modifier: Modifier = Modifier,
 ) {
+    val accent = AppTheme.colors.accent
+    val accentSoft = AppTheme.colors.accentSoft
+    val outlineSoft = AppTheme.colors.outlineSoft
+    val surfaceStrong = AppTheme.colors.surfaceStrong
     Card(
         modifier = modifier,
         colors = CardDefaults.cardColors(
@@ -311,65 +315,100 @@ private fun MirrorDashboardCard(
         ),
         shape = RoundedCornerShape(34.dp),
     ) {
-        Column(
+        Box(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(horizontal = 20.dp, vertical = 22.dp),
-            verticalArrangement = Arrangement.spacedBy(18.dp),
-        ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                DashboardEdgeLabel(label = "SOLL")
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text(
-                        text = stageLabel,
-                        style = AppTheme.typography.label,
-                        color = AppTheme.colors.muted,
+                .drawBehind {
+                    val centerX = size.width * 0.5f
+                    val glowCenterY = size.height * 0.42f
+                    val topY = size.height * 0.24f
+                    val bottomY = size.height * 0.82f
+                    drawCircle(
+                        color = accentSoft.copy(alpha = 0.12f),
+                        radius = size.minDimension * 0.34f,
+                        center = androidx.compose.ui.geometry.Offset(centerX, glowCenterY),
                     )
+                    drawCircle(
+                        color = Color.White.copy(alpha = 0.52f),
+                        radius = size.minDimension * 0.24f,
+                        center = androidx.compose.ui.geometry.Offset(centerX, glowCenterY),
+                    )
+                    drawLine(
+                        color = outlineSoft.copy(alpha = 0.55f),
+                        start = androidx.compose.ui.geometry.Offset(centerX, topY),
+                        end = androidx.compose.ui.geometry.Offset(centerX, bottomY),
+                        strokeWidth = 2.dp.toPx(),
+                    )
+                    if (lanes.isNotEmpty()) {
+                        val spacing = (bottomY - topY) / lanes.size.toFloat()
+                        lanes.indices.forEach { index ->
+                            val y = topY + (spacing * index) + (spacing * 0.5f)
+                            drawCircle(
+                                color = surfaceStrong.copy(alpha = 0.96f),
+                                radius = 6.dp.toPx(),
+                                center = androidx.compose.ui.geometry.Offset(centerX, y),
+                            )
+                            drawCircle(
+                                color = accent.copy(alpha = if (index % 2 == 0) 0.6f else 0.38f),
+                                radius = 2.5.dp.toPx(),
+                                center = androidx.compose.ui.geometry.Offset(centerX, y),
+                            )
+                        }
+                    }
+                }
+                .padding(horizontal = 20.dp, vertical = 22.dp),
+        ) {
+            Column(
+                modifier = Modifier.fillMaxSize(),
+                verticalArrangement = Arrangement.spacedBy(18.dp),
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    DashboardEdgeLabel(label = "SOLL")
                     Text(
                         text = "Dashboard",
                         style = AppTheme.typography.title,
                         color = AppTheme.colors.ink,
                     )
+                    DashboardEdgeLabel(label = "IST")
                 }
-                DashboardEdgeLabel(label = "IST")
-            }
 
-            HorizontalDivider(color = AppTheme.colors.outlineSoft.copy(alpha = 0.75f))
+                HorizontalDivider(color = AppTheme.colors.outlineSoft.copy(alpha = 0.75f))
 
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .weight(1f),
-                verticalArrangement = Arrangement.SpaceBetween,
-            ) {
-                lanes.forEach { lane ->
-                    MirrorLaneRow(lane = lane)
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .weight(1f),
+                    verticalArrangement = Arrangement.SpaceBetween,
+                ) {
+                    lanes.forEach { lane ->
+                        MirrorLaneRow(lane = lane)
+                    }
                 }
-            }
 
-            HorizontalDivider(color = AppTheme.colors.outlineSoft.copy(alpha = 0.62f))
+                HorizontalDivider(color = AppTheme.colors.outlineSoft.copy(alpha = 0.62f))
 
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Text(
-                    text = cadenceLabel,
-                    style = AppTheme.typography.mono,
-                    color = AppTheme.colors.muted,
-                )
                 Row(
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    MiniStatusDot(color = AppTheme.colors.ink)
-                    MiniStatusDot(color = AppTheme.colors.accent)
-                    MiniStatusDot(color = AppTheme.colors.accentSoft)
+                    Text(
+                        text = cadenceLabel,
+                        style = AppTheme.typography.mono,
+                        color = AppTheme.colors.muted,
+                    )
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        MiniStatusDot(color = AppTheme.colors.ink)
+                        MiniStatusDot(color = AppTheme.colors.accent)
+                        MiniStatusDot(color = AppTheme.colors.accentSoft)
+                    }
                 }
             }
         }
@@ -394,7 +433,7 @@ private fun MirrorLaneRow(
     Row(
         modifier = Modifier.fillMaxWidth(),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(14.dp),
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         MirrorSideBar(
             value = lane.target,
@@ -406,14 +445,9 @@ private fun MirrorLaneRow(
                 ),
             ),
             modifier = Modifier.weight(1f),
+            capColor = AppTheme.colors.ink,
         )
-        Text(
-            text = lane.label,
-            modifier = Modifier.width(72.dp),
-            style = AppTheme.typography.label,
-            color = AppTheme.colors.ink,
-            textAlign = TextAlign.Center,
-        )
+        LaneLabelChip(label = lane.label)
         MirrorSideBar(
             value = lane.actual,
             mirrored = false,
@@ -424,6 +458,29 @@ private fun MirrorLaneRow(
                 ),
             ),
             modifier = Modifier.weight(1f),
+            capColor = AppTheme.colors.accent,
+        )
+    }
+}
+
+@Composable
+private fun LaneLabelChip(
+    label: String,
+) {
+    Box(
+        modifier = Modifier
+            .width(86.dp)
+            .clip(RoundedCornerShape(999.dp))
+            .background(AppTheme.colors.surfaceStrong.copy(alpha = 0.9f))
+            .border(1.dp, AppTheme.colors.outlineSoft.copy(alpha = 0.7f), RoundedCornerShape(999.dp))
+            .padding(horizontal = 10.dp, vertical = 6.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            text = label,
+            style = AppTheme.typography.label,
+            color = AppTheme.colors.ink,
+            textAlign = TextAlign.Center,
         )
     }
 }
@@ -434,13 +491,22 @@ private fun MirrorSideBar(
     mirrored: Boolean,
     brush: Brush,
     modifier: Modifier = Modifier,
+    capColor: Color,
 ) {
-    Box(
+    BoxWithConstraints(
         modifier = modifier
-            .height(18.dp)
+            .height(20.dp)
             .clip(RoundedCornerShape(999.dp))
-            .background(AppTheme.colors.surface.copy(alpha = 0.9f)),
+            .background(AppTheme.colors.surface.copy(alpha = 0.92f))
+            .border(1.dp, AppTheme.colors.outlineSoft.copy(alpha = 0.45f), RoundedCornerShape(999.dp)),
     ) {
+        val fillFraction = value.coerceIn(0f, 1f)
+        val capSize = 10.dp
+        val fillEndOffset = if (mirrored) {
+            (maxWidth * (1f - fillFraction)).coerceAtLeast(0.dp)
+        } else {
+            ((maxWidth * fillFraction) - capSize).coerceAtLeast(0.dp)
+        }
         Box(
             modifier = Modifier
                 .fillMaxSize()
@@ -450,9 +516,18 @@ private fun MirrorSideBar(
                 modifier = Modifier
                     .align(if (mirrored) Alignment.CenterEnd else Alignment.CenterStart)
                     .fillMaxHeight()
-                    .fillMaxWidth(value.coerceIn(0f, 1f))
+                    .fillMaxWidth(fillFraction)
                     .clip(RoundedCornerShape(999.dp))
                     .background(brush),
+            )
+            Box(
+                modifier = Modifier
+                    .align(Alignment.CenterStart)
+                    .offset(x = fillEndOffset)
+                    .size(capSize)
+                    .clip(CircleShape)
+                    .background(capColor)
+                    .border(1.dp, AppTheme.colors.surfaceStrong, CircleShape),
             )
         }
     }
