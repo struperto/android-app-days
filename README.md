@@ -46,6 +46,13 @@ Out of scope for the initial foundation:
 - Keep `main` releasable.
 - Prefer small, reviewable changes.
 
+## Product docs
+
+The current product truth lives here:
+- `docs/single-v1.md`
+- `docs/decisions.md`
+- `docs/parking-lot.md`
+
 ## Current status
 
 The repository now contains the first Single-first product structure:
