@@ -10,6 +10,7 @@ class SingleHomeModelTest {
         val state = previewSingleHomeState()
 
         assertEquals("Heute", state.stageLabel)
+        assertEquals("Single", state.modeLabel)
         assertEquals(6, state.actions.size)
         assertEquals(
             listOf(
@@ -22,7 +23,7 @@ class SingleHomeModelTest {
             ),
             state.actions.map { it.route },
         )
-        assertTrue(state.focusTracks.isNotEmpty())
-        assertEquals(12, state.mirrorBars.size)
+        assertTrue(state.metrics.isNotEmpty())
+        assertEquals(6, state.mirrorLanes.size)
     }
 }
