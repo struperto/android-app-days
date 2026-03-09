@@ -37,11 +37,17 @@ fun DaysTheme(content: @Composable () -> Unit) {
         onPrimaryContainer = colors.ink,
         surface = colors.surface,
         onSurface = colors.ink,
+        surfaceBright = colors.surfaceStrong,
+        surfaceContainer = colors.surfaceMuted,
+        surfaceContainerHigh = colors.surfaceStrong,
         surfaceContainerHighest = colors.surfaceStrong,
         onSurfaceVariant = colors.muted,
         outline = colors.outlineSoft,
         background = colors.surface,
         onBackground = colors.ink,
+        secondary = colors.info,
+        tertiary = colors.success,
+        error = colors.danger,
     )
 
     CompositionLocalProvider(

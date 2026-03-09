@@ -4,23 +4,26 @@ Clean-slate Android app repo for the final `Days` product.
 
 ## Product direction
 
-This repository starts `Single-first`.
+This repository is `Single`-first.
 
-Initial V1 scope:
-- Home
-- Life Wheel onboarding and management
-- Working Set edit flow
-- Day schedule
-- Plan
-- Capture
-- Create
-- Small settings surface
+Current visible shape:
+- `Home`
+- `Einstellungen`
+- optional `Lebensrad` calibration
 
-Out of scope for the initial foundation:
-- Multi mode
-- Coworker mode
-- Operator and experiment screens
-- Large AI and background automation surface
+Current product idea:
+- `Home` is the day itself
+- the mirror dashboard shows fit vs drift
+- block overlays are the real work surface
+- `+` is only a small quick add
+- passive context currently comes from carryover, calendar, and notification pressure
+
+Out of scope for the current foundation:
+- `Multi`
+- `Assist` as a full mode
+- Operator / experiment surfaces
+- cloud AI
+- large passive signal UI
 
 ## Tech baseline
 
@@ -28,6 +31,7 @@ Out of scope for the initial foundation:
 - Jetpack Compose
 - Material 3
 - Navigation Compose
+- Room
 - Android minSdk 26
 - Android targetSdk 36
 - JDK 17
@@ -37,32 +41,24 @@ Out of scope for the initial foundation:
 ```bash
 ./gradlew :app:assembleDebug
 ./gradlew :app:testDebugUnitTest
+./gradlew :app:compileDebugAndroidTestKotlin
 ```
-
-## Collaboration defaults
-
-- Work on feature branches.
-- Open PRs into `main`.
-- Keep `main` releasable.
-- Prefer small, reviewable changes.
 
 ## Product docs
 
 The current product truth lives here:
 - `docs/single-v1.md`
+- `docs/single-v1-contract.md`
+- `docs/single-ux-concept.md`
 - `docs/decisions.md`
 - `docs/parking-lot.md`
 
 ## Current status
 
-The repository now contains the first Single-first product structure:
+The repository currently contains:
 - `single_home`
-- `single_life_wheel`
-- `single_working_set`
-- `single_day_schedule`
-- `single_plan`
-- `single_capture`
-- `single_create`
-- `settings`
+- optional calibration and legacy slices kept compile-safe
+- local data + projection for a `Soll` / `Ist` day track
 
-These screens are still lightweight, but the flow boundaries are now explicit and ready for iterative product work.
+The active visible loop is:
+`Home -> Block Overlay -> Home`

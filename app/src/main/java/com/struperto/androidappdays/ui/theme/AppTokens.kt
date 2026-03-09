@@ -12,10 +12,15 @@ import androidx.compose.ui.unit.sp
 data class AppColors(
     val surface: Color,
     val surfaceStrong: Color,
+    val surfaceMuted: Color,
     val ink: Color,
     val muted: Color,
     val accent: Color,
     val accentSoft: Color,
+    val success: Color,
+    val warning: Color,
+    val danger: Color,
+    val info: Color,
     val outline: Color,
     val outlineSoft: Color,
 )
@@ -23,10 +28,15 @@ data class AppColors(
 val LightAppColors = AppColors(
     surface = Color(0xFFF6F1EA),
     surfaceStrong = Color(0xFFFFFFFF),
+    surfaceMuted = Color(0xFFF1E6DA),
     ink = Color(0xFF1B1A17),
     muted = Color(0xFF6D675C),
     accent = Color(0xFFE07A5F),
     accentSoft = Color(0xFFF3C1B0),
+    success = Color(0xFF4F8A5B),
+    warning = Color(0xFFC8933F),
+    danger = Color(0xFFB85C38),
+    info = Color(0xFF5C7FA8),
     outline = Color(0xFF1B1A17),
     outlineSoft = Color(0xFFCBC3B9),
 )
