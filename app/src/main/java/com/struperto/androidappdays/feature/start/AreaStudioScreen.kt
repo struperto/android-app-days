@@ -35,6 +35,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
@@ -53,11 +54,12 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.struperto.androidappdays.domain.DataSourceKind
 import com.struperto.androidappdays.domain.area.AreaAuthoringAxis
+import com.struperto.androidappdays.domain.area.AreaSourceSetupStatus
 import com.struperto.androidappdays.feature.single.shared.ChoiceChipItem
 import com.struperto.androidappdays.feature.single.shared.ChoiceChipRow
 import com.struperto.androidappdays.feature.single.shared.DaysMetaPill
-import com.struperto.androidappdays.feature.single.shared.DaysPageIntroCard
 import com.struperto.androidappdays.feature.single.shared.DaysPageScaffold
 import com.struperto.androidappdays.ui.theme.AppTheme
 
@@ -72,12 +74,15 @@ fun AreaStudioScreen(
     state: AreaStudioUiState,
     areaId: String,
     onBack: () -> Unit,
+    onOpenSourceSettings: () -> Unit,
     onTargetScoreChange: (String, Float) -> Unit,
     onManualScoreChange: (String, Int?) -> Unit,
     onManualStateChange: (String, String?) -> Unit,
     onManualNoteChange: (String, String?) -> Unit,
     onClearSnapshot: (String) -> Unit,
     onUpdateIdentity: (String, String, String, String, String) -> Unit,
+    onBindSource: (String, DataSourceKind) -> Unit,
+    onUnbindSource: (String, DataSourceKind) -> Unit,
     onCadenceChange: (String, String) -> Unit,
     onIntensityChange: (String, Float) -> Unit,
     onSignalBlendChange: (String, Float) -> Unit,
@@ -96,6 +101,7 @@ fun AreaStudioScreen(
     val areaState = state.areas[areaId] ?: return
     val area = areaState.detail
     val authoring = areaState.authoring
+    val sourceSetup = areaState.sourceSetup
     var activeSurface by rememberSaveable(area.areaId) { mutableStateOf(AreaStudioSurface.Overview) }
     var activePanel by rememberSaveable(area.areaId) { mutableStateOf<StartAreaPanel?>(null) }
 
@@ -162,15 +168,35 @@ fun AreaStudioScreen(
         onBack = onBack,
         modifier = Modifier.testTag("area-studio-screen"),
         titleContent = {
-            AreaSettingsTopBarTitle(areaTitle = area.title)
+            AreaSettingsTopBarTitle(
+                areaTitle = area.title,
+                family = area.family,
+            )
         },
     ) {
+        val prominentHints = area.hints.filter { it.tone == StartAreaHintTone.Warning }
+        val lowerHints = area.hints.filter { it.tone == StartAreaHintTone.Notice }
         Column(
             modifier = Modifier
                 .fillMaxWidth()
                 .testTag("area-studio-content"),
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
+            if (prominentHints.isNotEmpty()) {
+                AreaHintsCard(
+                    area = area,
+                    hints = prominentHints,
+                )
+            }
+            sourceSetup?.let { setup ->
+                AreaSourceSetupCard(
+                    area = area,
+                    setup = setup,
+                    onOpenSourceSettings = onOpenSourceSettings,
+                    onBindSource = { sourceKind -> onBindSource(area.areaId, sourceKind) },
+                    onUnbindSource = { sourceKind -> onUnbindSource(area.areaId, sourceKind) },
+                )
+            }
             AreaHomeHubCard(
                 area = area,
                 onEditIdentity = { activeSurface = AreaStudioSurface.Identity },
@@ -184,7 +210,114 @@ fun AreaStudioScreen(
                 area = area,
                 onManualNoteChange = onManualNoteChange,
             )
+            if (lowerHints.isNotEmpty()) {
+                AreaHintsCard(
+                    area = area,
+                    hints = lowerHints,
+                )
+            }
         }
+    }
+}
+
+@Composable
+private fun AreaSourceSetupCard(
+    area: StartAreaDetailState,
+    setup: AreaSourceSetupState,
+    onOpenSourceSettings: () -> Unit,
+    onBindSource: (DataSourceKind) -> Unit,
+    onUnbindSource: (DataSourceKind) -> Unit,
+) {
+    val visual = startAreaUiVisuals(
+        family = area.family,
+        hintTone = if (setup.isWarning) StartAreaHintTone.Warning else StartAreaHintTone.Quiet,
+    )
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .testTag("area-source-setup-card"),
+        colors = CardDefaults.cardColors(
+            containerColor = visual.background.first().copy(alpha = 0.18f),
+        ),
+        shape = RoundedCornerShape(28.dp),
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(20.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp),
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    text = when (setup.sourceKind) {
+                        DataSourceKind.CALENDAR -> "Kalender"
+                        DataSourceKind.NOTIFICATIONS -> "Benachrichtigungen"
+                        DataSourceKind.HEALTH_CONNECT -> "Health Connect"
+                        DataSourceKind.MANUAL -> "Manuell"
+                    },
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold,
+                )
+                DaysMetaPill(label = sourceSetupStatusLabel(setup.status))
+            }
+            Column(
+                verticalArrangement = Arrangement.spacedBy(4.dp),
+            ) {
+                Text(
+                    text = setup.headline,
+                    style = MaterialTheme.typography.labelLarge,
+                    color = if (setup.isWarning) AppTheme.colors.danger else visual.signal,
+                )
+                Text(
+                    text = setup.detail,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                setup.primaryActionLabel?.let { label ->
+                    Button(
+                        onClick = {
+                            when {
+                                setup.canConnectSource -> onBindSource(setup.sourceKind)
+                                else -> onOpenSourceSettings()
+                            }
+                        },
+                    ) {
+                        Text(text = label)
+                    }
+                }
+                setup.secondaryActionLabel?.let { label ->
+                    OutlinedButton(
+                        onClick = {
+                            if (setup.canDisconnectSource) {
+                                onUnbindSource(setup.sourceKind)
+                            }
+                        },
+                    ) {
+                        Text(text = label)
+                    }
+                }
+            }
+        }
+    }
+}
+
+private fun sourceSetupStatusLabel(
+    status: AreaSourceSetupStatus,
+): String {
+    return when (status) {
+        AreaSourceSetupStatus.UNCONFIGURED -> "Offen"
+        AreaSourceSetupStatus.PERMISSION_REQUIRED -> "Blockiert"
+        AreaSourceSetupStatus.READY -> "Bereit"
+        AreaSourceSetupStatus.NO_RECENT_OR_TODAY_DATA -> "Heute frei"
     }
 }
 
@@ -196,10 +329,14 @@ private fun AreaTodayOutputCard(
     var manualNoteDraft by rememberSaveable(area.areaId, area.manualNote) {
         mutableStateOf(area.manualNote.orEmpty())
     }
+    val visual = startAreaUiVisuals(
+        family = area.family,
+        hintTone = area.hints.firstOrNull()?.tone ?: StartAreaHintTone.Quiet,
+    )
     Card(
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(
-            containerColor = AppTheme.colors.surfaceStrong.copy(alpha = 0.97f),
+            containerColor = visual.background.first().copy(alpha = 0.18f),
         ),
         shape = RoundedCornerShape(28.dp),
     ) {
@@ -210,9 +347,14 @@ private fun AreaTodayOutputCard(
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             Text(
-                text = area.todayLabel,
+                text = startAreaDetailSectionTitle(area.family),
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.SemiBold,
+            )
+            Text(
+                text = area.todayLabel,
+                style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.onSurface,
             )
             Text(
                 text = area.todayRecommendation,
@@ -222,12 +364,7 @@ private fun AreaTodayOutputCard(
             Text(
                 text = area.todayStepLabel,
                 style = MaterialTheme.typography.labelLarge,
-                color = AppTheme.colors.accent,
-            )
-            Text(
-                text = area.todayOutput.evidenceSummary,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                color = visual.signal,
             )
             OutlinedTextField(
                 value = manualNoteDraft,
@@ -237,10 +374,10 @@ private fun AreaTodayOutputCard(
                 },
                 modifier = Modifier.fillMaxWidth(),
                 label = {
-                    Text(text = manualNoteLabel(area.todayOutput.behaviorClass))
+                    Text(text = startAreaManualNoteLabel(area.family))
                 },
                 placeholder = {
-                    Text(text = manualNotePlaceholder(area.todayOutput.behaviorClass))
+                    Text(text = startAreaManualNotePlaceholder(area.family))
                 },
                 minLines = 2,
                 maxLines = 4,
@@ -250,35 +387,10 @@ private fun AreaTodayOutputCard(
     }
 }
 
-private fun manualNoteLabel(
-    behaviorClass: com.struperto.androidappdays.domain.area.AreaBehaviorClass,
-): String {
-    return when (behaviorClass) {
-        com.struperto.androidappdays.domain.area.AreaBehaviorClass.TRACKING -> "Beobachtungsnotiz"
-        com.struperto.androidappdays.domain.area.AreaBehaviorClass.PROGRESS -> "Standnotiz"
-        com.struperto.androidappdays.domain.area.AreaBehaviorClass.RELATIONSHIP -> "Kontakt- oder Tonnotiz"
-        com.struperto.androidappdays.domain.area.AreaBehaviorClass.MAINTENANCE -> "Pflegenotiz"
-        com.struperto.androidappdays.domain.area.AreaBehaviorClass.PROTECTION -> "Warn- oder Schutznotiz"
-        com.struperto.androidappdays.domain.area.AreaBehaviorClass.REFLECTION -> "Reflexionsnotiz"
-    }
-}
-
-private fun manualNotePlaceholder(
-    behaviorClass: com.struperto.androidappdays.domain.area.AreaBehaviorClass,
-): String {
-    return when (behaviorClass) {
-        com.struperto.androidappdays.domain.area.AreaBehaviorClass.TRACKING -> "Kurz notieren, was heute auffaellt"
-        com.struperto.androidappdays.domain.area.AreaBehaviorClass.PROGRESS -> "Kurz festhalten, was steht oder blockiert"
-        com.struperto.androidappdays.domain.area.AreaBehaviorClass.RELATIONSHIP -> "Ton, letzter Impuls oder naechstes Follow-up"
-        com.struperto.androidappdays.domain.area.AreaBehaviorClass.MAINTENANCE -> "Offener Pflegepunkt, Faelligkeit oder Erhaltungszug"
-        com.struperto.androidappdays.domain.area.AreaBehaviorClass.PROTECTION -> "Trigger, Warnzeichen oder Rueckweg"
-        com.struperto.androidappdays.domain.area.AreaBehaviorClass.REFLECTION -> "Ein kurzer Lesepunkt fuer heute"
-    }
-}
-
 @Composable
 private fun AreaSettingsTopBarTitle(
     areaTitle: String,
+    family: StartAreaFamily,
 ) {
     Column(
         modifier = Modifier
@@ -295,7 +407,7 @@ private fun AreaSettingsTopBarTitle(
             overflow = TextOverflow.Ellipsis,
         )
         Text(
-            text = "Bereich",
+            text = family.label,
             style = MaterialTheme.typography.labelLarge,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             maxLines = 1,
@@ -332,14 +444,9 @@ private fun AreaAuthoringEntryCard(
                     verticalArrangement = Arrangement.spacedBy(4.dp),
                 ) {
                     Text(
-                        text = "Bereichscharakter",
+                        text = "Arbeitsweise",
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.SemiBold,
-                    )
-                    Text(
-                        text = authoring.summary,
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
                 FilledTonalIconButton(
@@ -352,7 +459,7 @@ private fun AreaAuthoringEntryCard(
                 ) {
                     Icon(
                         imageVector = Icons.Outlined.Tune,
-                        contentDescription = "Bereichscharakter oeffnen",
+                        contentDescription = "Arbeitsweise oeffnen",
                     )
                 }
             }
@@ -361,9 +468,6 @@ private fun AreaAuthoringEntryCard(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 DaysMetaPill(label = authoring.basisLabel)
-                authoring.previewAxes.firstOrNull()?.let { axis ->
-                    DaysMetaPill(label = "${axis.label} ${axis.valueLabel}")
-                }
             }
         }
     }
@@ -375,10 +479,14 @@ private fun AreaHomeHubCard(
     onEditIdentity: () -> Unit,
     onOpenPanel: (StartAreaPanel) -> Unit,
 ) {
+    val visual = startAreaUiVisuals(
+        family = area.family,
+        hintTone = area.hints.firstOrNull()?.tone ?: StartAreaHintTone.Quiet,
+    )
     Card(
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(
-            containerColor = AppTheme.colors.surfaceStrong.copy(alpha = 0.98f),
+            containerColor = visual.background.first().copy(alpha = 0.16f),
         ),
         shape = RoundedCornerShape(30.dp),
     ) {
@@ -399,13 +507,13 @@ private fun AreaHomeHubCard(
                         modifier = Modifier
                             .size(62.dp)
                             .clip(RoundedCornerShape(20.dp))
-                            .background(AppTheme.colors.surfaceMuted.copy(alpha = 0.82f)),
+                            .background(visual.chrome),
                         contentAlignment = Alignment.Center,
                     ) {
                         Icon(
                             imageVector = startAreaIcon(area.iconKey),
                             contentDescription = null,
-                            tint = MaterialTheme.colorScheme.onSurface,
+                            tint = visual.iconTint,
                             modifier = Modifier.size(26.dp),
                         )
                     }
@@ -432,39 +540,23 @@ private fun AreaHomeHubCard(
                     verticalArrangement = Arrangement.spacedBy(6.dp),
                 ) {
                     Text(
+                        text = area.family.shortLabel,
+                        style = MaterialTheme.typography.labelLarge,
+                        color = visual.signal,
+                    )
+                    Text(
                         text = area.title,
                         style = MaterialTheme.typography.headlineSmall,
                     )
                     Text(
-                        text = "${area.statusLabel} · Soll ${area.targetScore}/5",
+                        text = area.hints.firstOrNull()?.compactLabel ?: area.statusLabel,
                         style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                    Text(
-                        text = area.summary,
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis,
+                        color = visual.signal,
                     )
                 }
             }
-            AreaHomeMetricGrid(
-                metrics = listOf(
-                    StartPanelMetricState("Lage", area.statusLabel),
-                    StartPanelMetricState("Richtung", area.profileState.directionLabel),
-                    StartPanelMetricState("Quellen", area.profileState.sourcesLabel),
-                    StartPanelMetricState("Flow", area.profileState.flowLabel),
-                ),
-            )
-            LinearProgressIndicator(
-                progress = { area.progress },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(999.dp)),
-            )
-            HorizontalDivider(color = AppTheme.colors.outline.copy(alpha = 0.12f))
             AreaPanelEntryGrid(
+                family = area.family,
                 panelStates = area.panelStates,
                 onOpenPanel = onOpenPanel,
             )
@@ -485,14 +577,10 @@ private fun AreaAuthoringScreen(
     onVisibilityLevelChange: (String, String) -> Unit,
 ) {
     DaysPageScaffold(
-        title = "Bereichscharakter",
+        title = "Arbeitsweise",
         onBack = onBack,
         modifier = Modifier.testTag("area-authoring-screen"),
     ) {
-        DaysPageIntroCard(
-            title = area.title,
-            summary = authoring.summary,
-        )
         Card(
             modifier = Modifier.fillMaxWidth(),
             colors = CardDefaults.cardColors(containerColor = AppTheme.colors.surfaceStrong.copy(alpha = 0.96f)),
@@ -505,12 +593,12 @@ private fun AreaAuthoringScreen(
                 verticalArrangement = Arrangement.spacedBy(10.dp),
             ) {
                 Text(
-                    text = "Typbasis",
+                    text = "Grundmuster",
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.SemiBold,
                 )
                 Text(
-                    text = "${authoring.basisLabel} · ${authoring.definitionId}",
+                    text = authoring.basisLabel,
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -558,6 +646,60 @@ private fun AreaAuthoringScreen(
                             },
                         )
                     }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun AreaHintsCard(
+    area: StartAreaDetailState,
+    hints: List<StartAreaHintState>,
+) {
+    val strongestHint = hints.maxByOrNull(StartAreaHintState::tonePriority) ?: return
+    val visual = startAreaUiVisuals(
+        family = area.family,
+        hintTone = strongestHint.tone,
+    )
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .testTag("area-hints-card"),
+        colors = CardDefaults.cardColors(
+            containerColor = visual.background.first().copy(alpha = 0.18f),
+        ),
+        shape = RoundedCornerShape(28.dp),
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(20.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Text(
+                text = "Hinweise",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold,
+            )
+            hints.take(3).forEach { hint ->
+                Column(
+                    verticalArrangement = Arrangement.spacedBy(4.dp),
+                ) {
+                    Text(
+                        text = hint.title,
+                        style = MaterialTheme.typography.labelLarge,
+                        color = when (hint.tone) {
+                            StartAreaHintTone.Warning -> AppTheme.colors.danger
+                            StartAreaHintTone.Notice -> AppTheme.colors.warning
+                            StartAreaHintTone.Quiet -> visual.signal
+                        },
+                    )
+                    Text(
+                        text = hint.detail,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
                 }
             }
         }
@@ -676,6 +818,7 @@ private fun AreaHomeMetricGrid(
 
 @Composable
 private fun AreaPanelEntryGrid(
+    family: StartAreaFamily,
     panelStates: List<StartAreaPanelState>,
     onOpenPanel: (StartAreaPanel) -> Unit,
 ) {
@@ -697,6 +840,7 @@ private fun AreaPanelEntryGrid(
                     rowItems.forEach { panelState ->
                         AreaPanelEntryCard(
                             panelState = panelState,
+                            family = family,
                             modifier = Modifier.weight(1f),
                             onClick = { onOpenPanel(panelState.panel) },
                         )
@@ -713,17 +857,26 @@ private fun AreaPanelEntryGrid(
 @Composable
 private fun AreaPanelEntryCard(
     panelState: StartAreaPanelState,
+    family: StartAreaFamily,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val accent = startAreaPanelAccentColor(
+        family = family,
+        panel = panelState.panel,
+    )
+    val panelCopy = startAreaPanelCopy(
+        family = family,
+        panel = panelState.panel,
+    )
     Column(
         modifier = modifier
             .heightIn(min = 108.dp)
             .clip(RoundedCornerShape(22.dp))
-            .background(AppTheme.colors.surface.copy(alpha = 0.72f))
+            .background(accent.copy(alpha = 0.08f))
             .border(
                 width = 1.dp,
-                color = AppTheme.colors.outline.copy(alpha = 0.16f),
+                color = accent.copy(alpha = 0.18f),
                 shape = RoundedCornerShape(22.dp),
             )
             .clickable(onClick = onClick)
@@ -739,13 +892,13 @@ private fun AreaPanelEntryCard(
                 modifier = Modifier
                     .size(42.dp)
                     .clip(RoundedCornerShape(15.dp))
-                    .background(AppTheme.colors.surfaceMuted.copy(alpha = 0.9f)),
+                    .background(accent.copy(alpha = 0.16f)),
                 contentAlignment = Alignment.Center,
             ) {
                 Icon(
                     imageVector = panelState.icon,
                     contentDescription = null,
-                    tint = MaterialTheme.colorScheme.onSurface,
+                    tint = accent,
                     modifier = Modifier.size(20.dp),
                 )
             }
@@ -761,31 +914,22 @@ private fun AreaPanelEntryCard(
                 Text(
                     text = panelState.countLabel,
                     style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    color = accent,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
                 Text(
-                    text = panelState.summary,
-                    style = MaterialTheme.typography.bodySmall,
+                    text = panelCopy.actionLabel,
+                    style = MaterialTheme.typography.labelLarge,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 2,
+                    maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
-                if (panelState.screenState.effectLabel.isNotBlank()) {
-                    Text(
-                        text = panelState.screenState.effectLabel,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurface,
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                }
             }
             Icon(
                 imageVector = Icons.AutoMirrored.Outlined.ArrowForwardIos,
                 contentDescription = null,
-                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                tint = accent,
                 modifier = Modifier
                     .padding(top = 4.dp)
                     .size(16.dp),
@@ -796,7 +940,7 @@ private fun AreaPanelEntryCard(
             modifier = Modifier
                 .fillMaxWidth()
                 .clip(RoundedCornerShape(999.dp)),
-            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.28f),
+            color = accent.copy(alpha = 0.72f),
             trackColor = AppTheme.colors.outlineSoft.copy(alpha = 0.14f),
         )
     }
@@ -1000,7 +1144,6 @@ private fun StartPanelPage(
             actions = screenState.actions,
             onActionClick = onActionClick,
         )
-        StartPanelMetricSection(metrics = screenState.metrics)
     }
 }
 
@@ -1072,11 +1215,6 @@ private fun StartPanelCoreCard(
             }
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text(
-                    text = screenState.core.title,
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.SemiBold,
-                )
-                Text(
                     text = screenState.core.value,
                     style = MaterialTheme.typography.headlineMedium,
                 )
@@ -1092,31 +1230,6 @@ private fun StartPanelCoreCard(
                         )
                     }
             }
-            if (screenState.effectLabel.isNotBlank()) {
-                HorizontalDivider(color = AppTheme.colors.outline.copy(alpha = 0.12f))
-                Column(
-                    verticalArrangement = Arrangement.spacedBy(4.dp),
-                ) {
-                    Text(
-                        text = "Wirkung heute",
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                    Text(
-                        text = screenState.effectLabel,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurface,
-                    )
-                }
-            }
-            LinearProgressIndicator(
-                progress = { screenState.core.progress },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(999.dp)),
-                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f),
-                trackColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f),
-            )
         }
     }
 }
@@ -1146,18 +1259,11 @@ private fun StartPanelActionZone(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                    Text(
-                        text = "Einstellungen",
-                        style = MaterialTheme.typography.titleSmall,
-                        fontWeight = FontWeight.SemiBold,
-                    )
-                    Text(
-                        text = "Passe die wirksamen Hebel dieses Bereichs an.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
+                Text(
+                    text = "Einstellungen",
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.SemiBold,
+                )
                 if (directActions.isNotEmpty()) {
                     StartPanelActionToolbar(
                         directActions = directActions,
@@ -1243,98 +1349,12 @@ private fun StartPanelActionCard(
             verticalArrangement = Arrangement.spacedBy(4.dp),
         ) {
             Text(
-                text = action.label,
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            Text(
                 text = action.valueLabel,
                 style = MaterialTheme.typography.titleSmall,
                 fontWeight = FontWeight.SemiBold,
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
             )
-            if (action.supportingLabel.isNotBlank()) {
-                Text(
-                    text = action.supportingLabel,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 3,
-                    overflow = TextOverflow.Ellipsis,
-                )
-            }
-        }
-    }
-}
-
-@Composable
-private fun StartPanelMetricSection(
-    metrics: List<StartPanelMetricState>,
-) {
-    Column(
-        modifier = Modifier.fillMaxWidth(),
-        verticalArrangement = Arrangement.spacedBy(10.dp),
-    ) {
-        Text(
-            text = "Aktuell",
-            style = MaterialTheme.typography.labelLarge,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        StartPanelMetricRow(metrics = metrics)
-    }
-}
-
-@Composable
-private fun StartPanelMetricRow(
-    metrics: List<StartPanelMetricState>,
-) {
-    BoxWithConstraints(
-        modifier = Modifier.fillMaxWidth(),
-    ) {
-        val columns = if (maxWidth < 360.dp) 1 else metrics.size.coerceAtMost(2)
-        Column(
-            modifier = Modifier.fillMaxWidth(),
-            verticalArrangement = Arrangement.spacedBy(10.dp),
-        ) {
-            metrics.chunked(columns).forEach { rowItems ->
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(10.dp),
-                ) {
-                    rowItems.forEach { metric ->
-                        Card(
-                            modifier = Modifier.weight(1f),
-                            colors = CardDefaults.cardColors(
-                                containerColor = AppTheme.colors.surfaceStrong.copy(alpha = 0.9f),
-                            ),
-                            shape = RoundedCornerShape(22.dp),
-                        ) {
-                            Column(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(horizontal = 16.dp, vertical = 14.dp),
-                                verticalArrangement = Arrangement.spacedBy(4.dp),
-                            ) {
-                                Text(
-                                    text = metric.label,
-                                    style = MaterialTheme.typography.labelMedium,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                )
-                                Text(
-                                    text = metric.value,
-                                    style = MaterialTheme.typography.titleSmall,
-                                    fontWeight = FontWeight.SemiBold,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis,
-                                )
-                            }
-                        }
-                    }
-                    repeat(columns - rowItems.size) {
-                        Spacer(modifier = Modifier.weight(1f))
-                    }
-                }
-            }
         }
     }
 }

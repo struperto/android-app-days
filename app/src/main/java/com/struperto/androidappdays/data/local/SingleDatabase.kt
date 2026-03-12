@@ -23,9 +23,10 @@ import androidx.room.RoomDatabase
         ObservationEventEntity::class,
         DomainCatalogEntity::class,
         SourcePreferenceEntity::class,
+        AreaSourceBindingEntity::class,
         HourSlotEntryEntity::class,
     ],
-    version = 13,
+    version = 14,
     exportSchema = true,
 )
 abstract class SingleDatabase : RoomDatabase() {
@@ -42,6 +43,7 @@ abstract class SingleDatabase : RoomDatabase() {
     abstract fun observationEventDao(): ObservationEventDao
     abstract fun domainCatalogDao(): DomainCatalogDao
     abstract fun sourcePreferenceDao(): SourcePreferenceDao
+    abstract fun areaSourceBindingDao(): AreaSourceBindingDao
     abstract fun hourSlotEntryDao(): HourSlotEntryDao
 }
 

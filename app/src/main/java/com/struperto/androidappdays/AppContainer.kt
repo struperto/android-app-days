@@ -9,7 +9,9 @@ import com.struperto.androidappdays.data.local.MIGRATION_9_10
 import com.struperto.androidappdays.data.local.MIGRATION_10_11
 import com.struperto.androidappdays.data.local.MIGRATION_11_12
 import com.struperto.androidappdays.data.local.MIGRATION_12_13
+import com.struperto.androidappdays.data.local.MIGRATION_13_14
 import com.struperto.androidappdays.data.local.SingleDatabase
+import com.struperto.androidappdays.data.repository.AreaSourceBindingRepository
 import com.struperto.androidappdays.data.repository.CalendarSignalRepository
 import com.struperto.androidappdays.data.repository.CaptureRepository
 import com.struperto.androidappdays.data.repository.DeviceCalendarSignalRepository
@@ -34,6 +36,7 @@ import com.struperto.androidappdays.data.repository.RoomLifeAreaProfileRepositor
 import com.struperto.androidappdays.data.repository.RoomNotificationSignalRepository
 import com.struperto.androidappdays.data.repository.RoomObservationRepository
 import com.struperto.androidappdays.data.repository.RoomPlanRepository
+import com.struperto.androidappdays.data.repository.RoomAreaSourceBindingRepository
 import com.struperto.androidappdays.data.repository.RoomBackedAreaKernelRepository
 import com.struperto.androidappdays.data.repository.RoomUserFingerprintRepository
 import com.struperto.androidappdays.data.repository.RoomVorhabenRepository
@@ -71,6 +74,7 @@ class AppContainer(context: Context) {
             MIGRATION_10_11,
             MIGRATION_11_12,
             MIGRATION_12_13,
+            MIGRATION_13_14,
         ).build()
     }
 
@@ -193,6 +197,13 @@ class AppContainer(context: Context) {
             context = context.applicationContext,
             preferenceDao = database.sourcePreferenceDao(),
             healthConnectRepository = healthConnectRepository,
+            clock = clock,
+        )
+    }
+
+    val areaSourceBindingRepository: AreaSourceBindingRepository by lazy {
+        RoomAreaSourceBindingRepository(
+            dao = database.areaSourceBindingDao(),
             clock = clock,
         )
     }

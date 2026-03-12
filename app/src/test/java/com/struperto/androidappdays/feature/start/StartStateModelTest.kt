@@ -86,7 +86,7 @@ class StartStateModelTest {
 
         assertEquals(StartAreaStatusKind.Stable, detail.statusKind)
         assertEquals("4/5", detail.statusLabel)
-        assertEquals(listOf("Aktueller Status", "Richtung", "Quellen", "Flow"), detail.panelStates.map { it.title })
+        assertEquals(listOf("Tagesform", "Heute", "Signale", "Rhythmus"), detail.panelStates.map { it.title })
         assertEquals("Status", detail.panelStates.first { it.panel == StartAreaPanel.Snapshot }.countLabel)
         assertEquals("Ausbalanciert", detail.panelStates.first { it.panel == StartAreaPanel.Path }.countLabel)
         assertEquals("Signalnah", detail.panelStates.first { it.panel == StartAreaPanel.Sources }.countLabel)

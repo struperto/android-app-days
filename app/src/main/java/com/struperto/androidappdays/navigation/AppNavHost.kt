@@ -63,7 +63,7 @@ fun AppNavHost(
             }
             LaunchedEffect(bootstrapState.isReady) {
                 if (!bootstrapState.isReady) return@LaunchedEffect
-                navController.navigate(AppDestination.Home.route) {
+                navController.navigate(AppDestination.Start.route) {
                     popUpTo(AppDestination.Boot.route) {
                         inclusive = true
                     }
@@ -113,6 +113,7 @@ fun AppNavHost(
                         templateId = draft.templateId,
                         iconKey = draft.iconKey,
                         behaviorClass = draft.behaviorClass,
+                        sourceKind = draft.sourceKind,
                     ) { areaId ->
                         navController.navigate(startAreaRoute(areaId))
                     }
@@ -146,12 +147,15 @@ fun AppNavHost(
                 state = state,
                 areaId = areaId,
                 onBack = navController::popBackStack,
+                onOpenSourceSettings = { navController.navigate(AppDestination.SettingsSources.route) },
                 onTargetScoreChange = viewModel::setTargetScore,
                 onManualScoreChange = viewModel::setManualScore,
                 onManualStateChange = viewModel::setManualState,
                 onManualNoteChange = viewModel::setManualNote,
                 onClearSnapshot = viewModel::clearSnapshot,
                 onUpdateIdentity = viewModel::setAreaIdentity,
+                onBindSource = viewModel::bindSource,
+                onUnbindSource = viewModel::unbindSource,
                 onCadenceChange = viewModel::setCadence,
                 onIntensityChange = viewModel::setIntensity,
                 onSignalBlendChange = viewModel::setSignalBlend,

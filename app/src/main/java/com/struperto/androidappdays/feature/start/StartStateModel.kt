@@ -14,8 +14,11 @@ import com.struperto.androidappdays.domain.area.AreaLageType
 import com.struperto.androidappdays.domain.area.AreaLageMode
 import com.struperto.androidappdays.domain.area.AreaProfileConfig
 import com.struperto.androidappdays.domain.area.AreaSnapshot
+import com.struperto.androidappdays.domain.area.AreaSourceTruth
 import com.struperto.androidappdays.domain.area.AreaSourceChannel
 import com.struperto.androidappdays.domain.area.AreaSourcesMode
+import com.struperto.androidappdays.domain.area.AreaFreshnessBand
+import com.struperto.androidappdays.domain.area.AreaSeverity
 import com.struperto.androidappdays.domain.area.AreaTodayOutput
 import com.struperto.androidappdays.domain.area.AreaTodayOutputInput
 import com.struperto.androidappdays.domain.area.mapping.toAreaBlueprint
@@ -57,12 +60,14 @@ data class StartAreaOverviewTile(
     val areaId: String,
     val label: String,
     val summary: String,
+    val family: StartAreaFamily,
     val todayLabel: String,
     val todayStepLabel: String,
     val templateId: String,
     val iconKey: String,
     val statusKind: StartAreaStatusKind,
     val statusLabel: String,
+    val primaryHint: StartAreaHintState,
     val focusLabel: String,
     val profileLabel: String,
     val progress: Float,
@@ -111,6 +116,7 @@ data class StartAreaDetailState(
     val areaId: String,
     val title: String,
     val summary: String,
+    val family: StartAreaFamily,
     val templateId: String,
     val iconKey: String,
     val tracks: List<String>,
@@ -131,6 +137,7 @@ data class StartAreaDetailState(
     val flowCount: Int,
     val statusKind: StartAreaStatusKind,
     val statusLabel: String,
+    val hints: List<StartAreaHintState>,
     val todayLabel: String,
     val todayRecommendation: String,
     val todayStepLabel: String,
@@ -253,6 +260,54 @@ enum class StartAreaStatusKind {
     Pull,
 }
 
+enum class StartAreaFamily(
+    val label: String,
+    val shortLabel: String,
+) {
+    Radar(
+        label = "Radar",
+        shortLabel = "Radar",
+    ),
+    Pflicht(
+        label = "Pflicht",
+        shortLabel = "Pflicht",
+    ),
+    Routine(
+        label = "Routine",
+        shortLabel = "Routine",
+    ),
+    Kontakt(
+        label = "Kontakt",
+        shortLabel = "Kontakt",
+    ),
+    Gesundheit(
+        label = "Gesundheit",
+        shortLabel = "Gesundheit",
+    ),
+    Ort(
+        label = "Ort",
+        shortLabel = "Ort",
+    ),
+    Sammlung(
+        label = "Sammlung",
+        shortLabel = "Sammlung",
+    ),
+}
+
+enum class StartAreaHintTone {
+    Quiet,
+    Notice,
+    Warning,
+}
+
+data class StartAreaHintState(
+    val id: String,
+    val title: String,
+    val detail: String,
+    val compactLabel: String,
+    val tone: StartAreaHintTone,
+)
+
 fun mapStartOverviewState(
     areas: List<LifeArea>,
     dailyChecks: List<LifeAreaDailyCheck>,
@@ -316,7 +371,6 @@ fun projectStartOverviewState(
     val orderedAreas = inputs.sortedBy { it.instance.sortOrder }
     return StartOverviewState(
         areas = orderedAreas
-            .take(16)
             .mapIndexed { index, input ->
                 val instance = input.instance
                 val tracks = input.blueprint?.let(::startAreaTrackLabels)
@@ -348,10 +402,20 @@ fun projectStartOverviewState(
                     openPlanTitles = input.openPlanTitles,
                     dueCount = input.dueCount,
                 )
+                val family = resolveStartAreaFamily(
+                    instance = instance,
+                    blueprint = input.blueprint,
+                    todayOutput = todayOutput,
+                )
+                val hints = buildStartAreaHints(
+                    instance = instance,
+                    todayOutput = todayOutput,
+                )
                 StartAreaOverviewTile(
                     areaId = instance.areaId,
                     label = instance.title,
                     summary = instance.summary,
+                    family = family,
                     todayLabel = todayOutput.statusLabel,
                     todayStepLabel = todayOutput.nextMeaningfulStep.label,
                     templateId = instance.templateId ?: input.blueprint?.defaultTemplateId ?: "free",
@@ -360,6 +424,7 @@ fun projectStartOverviewState(
                     },
                     statusKind = statusPresentation.kind,
                     statusLabel = statusPresentation.overviewLabel,
+                    primaryHint = hints.first(),
                     focusLabel = focusTrack,
                     profileLabel = profileState.overviewLabel,
                     progress = statusPresentation.overviewProgress,
@@ -517,10 +582,20 @@ fun projectStartAreaDetailState(
         openPlanTitles = input.openPlanTitles,
         dueCount = input.dueCount,
     )
+    val family = resolveStartAreaFamily(
+        instance = instance,
+        blueprint = input.blueprint,
+        todayOutput = todayOutput,
+    )
+    val hints = buildStartAreaHints(
+        instance = instance,
+        todayOutput = todayOutput,
+    )
     return StartAreaDetailState(
         areaId = instance.areaId,
         title = instance.title,
         summary = instance.summary,
+        family = family,
         templateId = instance.templateId ?: input.blueprint.defaultTemplateId,
         iconKey = instance.iconKey.ifBlank { input.definition.iconKey },
         tracks = tracks,
@@ -541,11 +616,13 @@ fun projectStartAreaDetailState(
         flowCount = flowCount,
         statusKind = statusPresentation.kind,
         statusLabel = todayOutput.statusLabel,
+        hints = hints,
         todayLabel = todayOutput.headline,
         todayRecommendation = todayOutput.recommendation,
         todayStepLabel = todayOutput.nextMeaningfulStep.label,
         progress = statusPresentation.detailProgress,
         panelStates = buildStartAreaPanelStates(
+            family = family,
             definition = effectiveDefinition,
             legacyBlueprint = input.legacyBlueprint,
             kernelBlueprint = input.blueprint,
@@ -577,6 +654,172 @@ private fun resolveStartProjectionDefinition(
             AreaLageMode.State -> AreaLageType.STATE
         },
     )
+}
+
+private fun resolveStartAreaFamily(
+    instance: AreaInstance,
+    blueprint: AreaBlueprint?,
+    todayOutput: AreaTodayOutput,
+): StartAreaFamily {
+    val summaryText = buildString {
+        append(instance.title)
+        append(' ')
+        append(instance.summary)
+        blueprint?.summary?.let {
+            append(' ')
+            append(it)
+        }
+    }.lowercase()
+    val tokens = summaryText
+        .split(Regex("""[^\p{L}\p{N}]+"""))
+        .filter(String::isNotBlank)
+
+    fun containsAnyWordPrefix(vararg keywords: String): Boolean {
+        return keywords.any { keyword ->
+            tokens.any { token -> token.startsWith(keyword) }
+        }
+    }
+
+    fun containsAnyPhrase(vararg phrases: String): Boolean {
+        return phrases.any(summaryText::contains)
+    }
+
+    return when {
+        containsAnyWordPrefix("inbox", "idee", "sammel", "sammlung") -> StartAreaFamily.Sammlung
+        instance.templateId == "person" ||
+            containsAnyWordPrefix("kontakt", "famil", "freund", "community", "bezieh", "partner") ||
+            containsAnyPhrase("nachricht von") -> {
+            StartAreaFamily.Kontakt
+        }
+        containsAnyWordPrefix("schlaf", "sleep", "gesund", "health", "beweg", "energie", "koerper", "erhol") -> {
+            StartAreaFamily.Gesundheit
+        }
+        containsAnyWordPrefix("zuhause", "home", "ort", "orte", "weg", "wege", "standort") ||
+            containsAnyPhrase("wenn ich zuhause") -> {
+            StartAreaFamily.Ort
+        }
+        instance.templateId == "project" ||
+            containsAnyWordPrefix("kalender", "termin", "besprech", "admin", "frist", "finanz", "arbeit", "fokus") -> {
+            StartAreaFamily.Pflicht
+        }
+        containsAnyWordPrefix("screenshot", "foto", "website", "podcast", "feed", "nachrichten", "lesen") -> {
+            StartAreaFamily.Radar
+        }
+        instance.templateId == "place" -> StartAreaFamily.Ort
+        instance.templateId == "ritual" -> StartAreaFamily.Routine
+        instance.templateId == "medium" || instance.templateId == "theme" -> StartAreaFamily.Radar
+        todayOutput.behaviorClass == com.struperto.androidappdays.domain.area.AreaBehaviorClass.RELATIONSHIP -> {
+            StartAreaFamily.Kontakt
+        }
+        todayOutput.behaviorClass == com.struperto.androidappdays.domain.area.AreaBehaviorClass.PROGRESS ||
+            todayOutput.behaviorClass == com.struperto.androidappdays.domain.area.AreaBehaviorClass.PROTECTION -> {
+            StartAreaFamily.Pflicht
+        }
+        todayOutput.behaviorClass == com.struperto.androidappdays.domain.area.AreaBehaviorClass.MAINTENANCE -> {
+            StartAreaFamily.Routine
+        }
+        todayOutput.behaviorClass == com.struperto.androidappdays.domain.area.AreaBehaviorClass.TRACKING -> {
+            StartAreaFamily.Radar
+        }
+        else -> StartAreaFamily.Radar
+    }
+}
+
+private fun buildStartAreaHints(
+    instance: AreaInstance,
+    todayOutput: AreaTodayOutput,
+): List<StartAreaHintState> {
+    val hints = buildList {
+        val templateSummary = startAreaTemplate(instance.templateId ?: "free").summary
+        val summaryLooksGeneric = instance.summary.length < 52 ||
+            instance.summary.equals(templateSummary, ignoreCase = true)
+
+        when (todayOutput.sourceTruth) {
+            AreaSourceTruth.missing -> add(
+                StartAreaHintState(
+                    id = "source-missing",
+                    title = "Lokale Quelle fehlt",
+                    detail = "Dieser Bereich hat noch keine verlaessliche lokale Spur. Richte zuerst Eingaben oder eine klare Quelle ein.",
+                    compactLabel = "Quelle fehlt",
+                    tone = StartAreaHintTone.Notice,
+                ),
+            )
+
+            AreaSourceTruth.manual,
+            AreaSourceTruth.manual_plus_local,
+            AreaSourceTruth.local_derived -> Unit
+        }
+
+        if (todayOutput.isEmptyState) {
+            add(
+                StartAreaHintState(
+                    id = "empty-state",
+                    title = "Heute ist noch wenig sichtbar",
+                    detail = "Der Bereich ist angelegt, aber fuer heute liegt noch keine brauchbare Spur oder klare Einordnung vor.",
+                    compactLabel = "Heute noch leer",
+                    tone = StartAreaHintTone.Notice,
+                ),
+            )
+        }
+
+        if (todayOutput.freshnessBand == AreaFreshnessBand.STALE) {
+            add(
+                StartAreaHintState(
+                    id = "stale-signal",
+                    title = "Signal ist nicht mehr frisch",
+                    detail = "Die letzte brauchbare Spur ist schon aelter. Pruefe, ob dieser Bereich haeufiger gelesen oder aktualisiert werden soll.",
+                    compactLabel = "Spur ist alt",
+                    tone = StartAreaHintTone.Notice,
+                ),
+            )
+        }
+
+        if (summaryLooksGeneric && instance.templateId in setOf("free", "theme", "medium")) {
+            add(
+                StartAreaHintState(
+                    id = "meaning-open",
+                    title = "Zweck noch schaerfen",
+                    detail = "Formuliere den Bereich klarer. Dann werden Vorschlaege, Hinweise und spaetere Widgets deutlich treffsicherer.",
+                    compactLabel = "Zweck schaerfen",
+                    tone = StartAreaHintTone.Notice,
+                ),
+            )
+        }
+
+        if (todayOutput.severity == AreaSeverity.HIGH || todayOutput.severity == AreaSeverity.CRITICAL) {
+            add(
+                StartAreaHintState(
+                    id = "high-severity",
+                    title = "Braucht heute Aufmerksamkeit",
+                    detail = "Die heutige Lage ist nicht nur sichtbar, sondern merklich angespannt. Halte die Anzeige kompakt, aber den Bereich in Reichweite.",
+                    compactLabel = "Heute zieht",
+                    tone = StartAreaHintTone.Warning,
+                ),
+            )
+        }
+    }
+
+    if (hints.isEmpty()) {
+        return listOf(
+            StartAreaHintState(
+                id = "quiet",
+                title = "Laeuft ruhig",
+                detail = "Der Bereich ist aktuell ruhig lesbar. Auf Start reicht ein kurzes Signal ohne weitere Eskalation.",
+                compactLabel = "Laeuft ruhig",
+                tone = StartAreaHintTone.Quiet,
+            ),
+        )
+    }
+
+    return hints.sortedByDescending(StartAreaHintState::tonePriority)
+}
+
+fun StartAreaHintState.tonePriority(): Int {
+    return when (tone) {
+        StartAreaHintTone.Warning -> 3
+        StartAreaHintTone.Notice -> 2
+        StartAreaHintTone.Quiet -> 1
+    }
 }
 
 private fun buildStartAreaTodayOutput(
@@ -665,6 +908,7 @@ fun startAreaDetailProgress(
 }
 
 private fun buildStartAreaPanelStates(
+    family: StartAreaFamily,
     definition: AreaDefinition,
     legacyBlueprint: StartAreaBlueprint,
     kernelBlueprint: AreaBlueprint,
@@ -692,7 +936,7 @@ private fun buildStartAreaPanelStates(
     return listOf(
         StartAreaPanelState(
             panel = StartAreaPanel.Snapshot,
-            title = "Aktueller Status",
+            title = startAreaPanelCopy(family, StartAreaPanel.Snapshot).title,
             summary = startAreaSnapshotSummary(
                 summary = statusPresentation.panelSummary,
                 lageMode = profileState.lageMode,
@@ -723,7 +967,7 @@ private fun buildStartAreaPanelStates(
         ),
         StartAreaPanelState(
             panel = StartAreaPanel.Path,
-            title = "Richtung",
+            title = startAreaPanelCopy(family, StartAreaPanel.Path).title,
             summary = startAreaNextMoveLabel(
                 focusTrack = focusTrack,
                 cadence = cadence,
@@ -755,7 +999,7 @@ private fun buildStartAreaPanelStates(
         ),
         StartAreaPanelState(
             panel = StartAreaPanel.Sources,
-            title = "Quellen",
+            title = startAreaPanelCopy(family, StartAreaPanel.Sources).title,
             summary = startAreaSourcesSummary(
                 selectedTracks = selectedTracks,
                 trackLabels = trackLabels,
@@ -787,7 +1031,7 @@ private fun buildStartAreaPanelStates(
         ),
         StartAreaPanelState(
             panel = StartAreaPanel.Options,
-            title = "Flow",
+            title = startAreaPanelCopy(family, StartAreaPanel.Options).title,
             summary = startAreaFlowSummary(
                 blueprint = kernelBlueprint,
                 remindersEnabled = remindersEnabled,

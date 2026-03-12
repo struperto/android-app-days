@@ -47,11 +47,17 @@ fun SingleHomeScreen(
     val primaryHint = state.topPriorities.firstOrNull()
         ?: state.areaDock?.nextMeaningfulStep?.label
         ?: "Operative Ausfuehrung bleibt bewusst klein."
-    val summary = state.thesis.ifBlank {
+    val summary = state.areaDock?.recommendation
+        ?.takeIf { it.isNotBlank() && !it.equals(primaryHint, ignoreCase = true) }
+        ?: state.thesis.ifBlank {
         "Single bleibt sichtbar, aber reduziert. Der Modus zeigt nur noch den aktuellen Ausfuehrungskontext."
     }
     val secondaryHint = state.areaDock?.headline
-        ?.takeIf { it.isNotBlank() && !it.equals(primaryHint, ignoreCase = true) }
+        ?.takeIf {
+            it.isNotBlank() &&
+                !it.equals(primaryHint, ignoreCase = true) &&
+                !it.equals(summary, ignoreCase = true)
+        }
         ?: "Mehr operative Tiefe wird erst wieder freigelegt, wenn der Produktfokus das braucht."
 
     Column(

@@ -480,6 +480,34 @@ val MIGRATION_12_13 = object : Migration(12, 13) {
     }
 }
 
+val MIGRATION_13_14 = object : Migration(13, 14) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL(
+            """
+            CREATE TABLE IF NOT EXISTS `area_source_bindings` (
+                `areaId` TEXT NOT NULL,
+                `source` TEXT NOT NULL,
+                `createdAt` INTEGER NOT NULL,
+                `updatedAt` INTEGER NOT NULL,
+                PRIMARY KEY(`areaId`, `source`)
+            )
+            """.trimIndent(),
+        )
+        db.execSQL(
+            """
+            CREATE INDEX IF NOT EXISTS `index_area_source_bindings_areaId`
+            ON `area_source_bindings` (`areaId`)
+            """.trimIndent(),
+        )
+        db.execSQL(
+            """
+            CREATE INDEX IF NOT EXISTS `index_area_source_bindings_source`
+            ON `area_source_bindings` (`source`)
+            """.trimIndent(),
+        )
+    }
+}
+
 private fun updateAreaReferenceColumn(
     db: SupportSQLiteDatabase,
     table: String,

@@ -110,7 +110,7 @@ class StartDetailKernelProjectorTest {
 
         assertEquals("Projekte", detail.focusTrack)
         assertEquals("2/5", detail.statusLabel)
-        assertEquals(listOf("Aktueller Status", "Richtung", "Quellen", "Flow"), detail.panelStates.map { it.title })
+        assertEquals(listOf("Stand", "Naechster Zug", "Signale", "Rhythmus"), detail.panelStates.map { it.title })
 
         val pathPanel = detail.panelStates.first { it.panel == StartAreaPanel.Path }
         assertEquals("Diese Woche Projekte voranbringen", pathPanel.summary)

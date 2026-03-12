@@ -3,8 +3,24 @@ package com.struperto.androidappdays.feature.start
 import com.struperto.androidappdays.data.repository.AreaKernelRepository
 import com.struperto.androidappdays.data.repository.AreaKernelBootstrapState
 import com.struperto.androidappdays.data.repository.AreaKernelPersistenceBoundary
+import com.struperto.androidappdays.data.repository.AreaSourceBinding
+import com.struperto.androidappdays.data.repository.AreaSourceBindingRepository
+import com.struperto.androidappdays.data.repository.CalendarSignal
+import com.struperto.androidappdays.data.repository.CalendarSignalRepository
 import com.struperto.androidappdays.data.repository.CreateAreaInstanceDraft
 import com.struperto.androidappdays.data.repository.FakePlanRepository
+import com.struperto.androidappdays.data.repository.HealthConnectRepository
+import com.struperto.androidappdays.data.repository.NotificationSignal
+import com.struperto.androidappdays.data.repository.NotificationSignalRepository
+import com.struperto.androidappdays.data.repository.SourceCapabilityRepository
+import com.struperto.androidappdays.domain.CapabilityProfile
+import com.struperto.androidappdays.domain.DataSourceCapability
+import com.struperto.androidappdays.domain.DataSourceKind
+import com.struperto.androidappdays.domain.DomainObservation
+import com.struperto.androidappdays.domain.DomainObservationValue
+import com.struperto.androidappdays.domain.LifeDomain
+import com.struperto.androidappdays.domain.ObservationMetric
+import com.struperto.androidappdays.domain.ObservationSource
 import com.struperto.androidappdays.domain.area.AreaInstance
 import com.struperto.androidappdays.domain.area.AreaSnapshot
 import com.struperto.androidappdays.domain.area.defaultAreaAuthoringConfig
@@ -18,6 +34,7 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -40,9 +57,9 @@ class AreaStudioViewModelTest {
             instances = listOf(
                 AreaInstance(
                     areaId = "vitality",
-                    title = "Vitalitaet",
-                    summary = "Schlaf und Energie tragen.",
-                    iconKey = "heart",
+                    title = "Ideenraum",
+                    summary = "Gedanken ruhig sammeln.",
+                    iconKey = "spark",
                     targetScore = 4,
                     sortOrder = 0,
                     isActive = true,
@@ -56,7 +73,7 @@ class AreaStudioViewModelTest {
                     authoringConfig = defaultAreaAuthoringConfig(
                         definition = startAreaKernelDefinition("vitality"),
                     ),
-                    templateId = "ritual",
+                    templateId = "free",
                 ),
             ),
             snapshots = listOf(
@@ -69,14 +86,19 @@ class AreaStudioViewModelTest {
         )
         val viewModel = AreaStudioViewModel(
             areaKernelRepository = areaKernelRepository,
+            areaSourceBindingRepository = FakeAreaStudioSourceBindingRepository(),
             planRepository = FakePlanRepository(),
+            sourceCapabilityRepository = FakeAreaStudioSourceCapabilityRepository(),
+            calendarSignalRepository = FakeAreaStudioCalendarSignalRepository(),
+            notificationSignalRepository = FakeAreaStudioNotificationSignalRepository(),
+            healthConnectRepository = FakeAreaStudioHealthConnectRepository(),
             clock = clock,
         )
 
         val areaState = viewModel.state.first { it.areas.isNotEmpty() }.areas.getValue("vitality")
         val detail = areaState.detail
 
-        assertEquals("Vitalitaet", detail.title)
+        assertEquals("Ideenraum", detail.title)
         assertEquals("3/5", detail.statusLabel)
         assertEquals("Energie", detail.focusTrack)
         assertEquals("Stabil", detail.profileState.flowLabel)
@@ -112,7 +134,12 @@ class AreaStudioViewModelTest {
         )
         val viewModel = AreaStudioViewModel(
             areaKernelRepository = areaKernelRepository,
+            areaSourceBindingRepository = FakeAreaStudioSourceBindingRepository(),
             planRepository = FakePlanRepository(),
+            sourceCapabilityRepository = FakeAreaStudioSourceCapabilityRepository(),
+            calendarSignalRepository = FakeAreaStudioCalendarSignalRepository(),
+            notificationSignalRepository = FakeAreaStudioNotificationSignalRepository(),
+            healthConnectRepository = FakeAreaStudioHealthConnectRepository(),
             clock = clock,
         )
         viewModel.state.first { it.areas.isNotEmpty() }
@@ -175,7 +202,12 @@ class AreaStudioViewModelTest {
         )
         val viewModel = AreaStudioViewModel(
             areaKernelRepository = areaKernelRepository,
+            areaSourceBindingRepository = FakeAreaStudioSourceBindingRepository(),
             planRepository = FakePlanRepository(),
+            sourceCapabilityRepository = FakeAreaStudioSourceCapabilityRepository(),
+            calendarSignalRepository = FakeAreaStudioCalendarSignalRepository(),
+            notificationSignalRepository = FakeAreaStudioNotificationSignalRepository(),
+            healthConnectRepository = FakeAreaStudioHealthConnectRepository(),
             clock = clock,
         )
         viewModel.state.first { it.areas.isNotEmpty() }
@@ -228,7 +260,12 @@ class AreaStudioViewModelTest {
         )
         val viewModel = AreaStudioViewModel(
             areaKernelRepository = areaKernelRepository,
+            areaSourceBindingRepository = FakeAreaStudioSourceBindingRepository(),
             planRepository = FakePlanRepository(),
+            sourceCapabilityRepository = FakeAreaStudioSourceCapabilityRepository(),
+            calendarSignalRepository = FakeAreaStudioCalendarSignalRepository(),
+            notificationSignalRepository = FakeAreaStudioNotificationSignalRepository(),
+            healthConnectRepository = FakeAreaStudioHealthConnectRepository(),
             clock = clock,
         )
         viewModel.state.first { it.areas.isNotEmpty() }
@@ -272,7 +309,12 @@ class AreaStudioViewModelTest {
         )
         val viewModel = AreaStudioViewModel(
             areaKernelRepository = areaKernelRepository,
+            areaSourceBindingRepository = FakeAreaStudioSourceBindingRepository(),
             planRepository = FakePlanRepository(),
+            sourceCapabilityRepository = FakeAreaStudioSourceCapabilityRepository(),
+            calendarSignalRepository = FakeAreaStudioCalendarSignalRepository(),
+            notificationSignalRepository = FakeAreaStudioNotificationSignalRepository(),
+            healthConnectRepository = FakeAreaStudioHealthConnectRepository(),
             clock = clock,
         )
         viewModel.state.first { it.areas.isNotEmpty() }
@@ -295,6 +337,165 @@ class AreaStudioViewModelTest {
         assertEquals("active", updated.authoringConfig.flowProfile.persistedValue)
         assertEquals("BASIC", updated.authoringConfig.complexityLevel.name)
         assertEquals("focused", updated.authoringConfig.visibilityLevel.persistedValue)
+    }
+
+    @Test
+    fun state_exposesCalendarSourceSetupForBoundArea() = runTest {
+        val areaKernelRepository = FakeAreaStudioAreaKernelRepository(
+            instances = listOf(
+                AreaInstance(
+                    areaId = "home",
+                    title = "Kalender Heute",
+                    summary = "Besprechungen und Termine lesen.",
+                    iconKey = "calendar",
+                    targetScore = 3,
+                    sortOrder = 0,
+                    isActive = true,
+                    cadenceKey = "adaptive",
+                    selectedTracks = linkedSetOf("Termine"),
+                    signalBlend = 60,
+                    intensity = 3,
+                    remindersEnabled = false,
+                    reviewEnabled = true,
+                    experimentsEnabled = false,
+                    authoringConfig = defaultAreaAuthoringConfig(
+                        definition = startAreaKernelDefinition("home"),
+                    ),
+                    templateId = "place",
+                ),
+            ),
+        )
+        val viewModel = AreaStudioViewModel(
+            areaKernelRepository = areaKernelRepository,
+            areaSourceBindingRepository = FakeAreaStudioSourceBindingRepository(
+                bindings = listOf(
+                    AreaSourceBinding(
+                        areaId = "home",
+                        source = DataSourceKind.CALENDAR,
+                    ),
+                ),
+            ),
+            planRepository = FakePlanRepository(),
+            sourceCapabilityRepository = FakeAreaStudioSourceCapabilityRepository(
+                enabledSources = setOf(DataSourceKind.CALENDAR),
+            ),
+            calendarSignalRepository = FakeAreaStudioCalendarSignalRepository(
+                signals = listOf(
+                    CalendarSignal(
+                        id = 1L,
+                        title = "Review",
+                        startMillis = Instant.parse("2026-03-11T10:00:00Z").toEpochMilli(),
+                        endMillis = Instant.parse("2026-03-11T11:00:00Z").toEpochMilli(),
+                        isAllDay = false,
+                    ),
+                ),
+            ),
+            notificationSignalRepository = FakeAreaStudioNotificationSignalRepository(),
+            healthConnectRepository = FakeAreaStudioHealthConnectRepository(),
+            clock = clock,
+        )
+
+        val areaState = viewModel.state.first { it.areas.isNotEmpty() }.areas.getValue("home")
+
+        assertTrue(areaState.detail.hints.any { it.title == "Kalender aktiv" })
+        assertEquals("1 Termin heute", areaState.sourceSetup?.headline)
+        assertEquals("Trennen", areaState.sourceSetup?.secondaryActionLabel)
+    }
+
+    @Test
+    fun bindCalendar_writesThroughAreaSourceBindingRepository() = runTest {
+        val bindings = FakeAreaStudioSourceBindingRepository()
+        val viewModel = AreaStudioViewModel(
+            areaKernelRepository = FakeAreaStudioAreaKernelRepository(),
+            areaSourceBindingRepository = bindings,
+            planRepository = FakePlanRepository(),
+            sourceCapabilityRepository = FakeAreaStudioSourceCapabilityRepository(),
+            calendarSignalRepository = FakeAreaStudioCalendarSignalRepository(),
+            notificationSignalRepository = FakeAreaStudioNotificationSignalRepository(),
+            healthConnectRepository = FakeAreaStudioHealthConnectRepository(),
+            clock = clock,
+        )
+
+        viewModel.bindSource("home", DataSourceKind.CALENDAR)
+        viewModel.unbindSource("home", DataSourceKind.CALENDAR)
+
+        assertEquals(
+            listOf(AreaSourceBinding(areaId = "home", source = DataSourceKind.CALENDAR)),
+            bindings.boundHistory,
+        )
+        assertEquals(
+            listOf(AreaSourceBinding(areaId = "home", source = DataSourceKind.CALENDAR)),
+            bindings.unboundHistory,
+        )
+    }
+
+    @Test
+    fun state_exposesHealthSourceSetupForBoundArea() = runTest {
+        val areaKernelRepository = FakeAreaStudioAreaKernelRepository(
+            instances = listOf(
+                AreaInstance(
+                    areaId = "sleep",
+                    title = "Schlaf Blick",
+                    summary = "Schlaf und Bewegung sichtbar halten.",
+                    iconKey = "heart",
+                    targetScore = 3,
+                    sortOrder = 0,
+                    isActive = true,
+                    cadenceKey = "adaptive",
+                    selectedTracks = linkedSetOf("Schlaf"),
+                    signalBlend = 60,
+                    intensity = 3,
+                    remindersEnabled = false,
+                    reviewEnabled = true,
+                    experimentsEnabled = false,
+                    authoringConfig = defaultAreaAuthoringConfig(
+                        definition = startAreaKernelDefinition("vitality"),
+                    ),
+                    templateId = "ritual",
+                ),
+            ),
+        )
+        val viewModel = AreaStudioViewModel(
+            areaKernelRepository = areaKernelRepository,
+            areaSourceBindingRepository = FakeAreaStudioSourceBindingRepository(
+                bindings = listOf(
+                    AreaSourceBinding(
+                        areaId = "sleep",
+                        source = DataSourceKind.HEALTH_CONNECT,
+                    ),
+                ),
+            ),
+            planRepository = FakePlanRepository(),
+            sourceCapabilityRepository = FakeAreaStudioSourceCapabilityRepository(
+                enabledSources = setOf(DataSourceKind.HEALTH_CONNECT),
+            ),
+            calendarSignalRepository = FakeAreaStudioCalendarSignalRepository(),
+            notificationSignalRepository = FakeAreaStudioNotificationSignalRepository(),
+            healthConnectRepository = FakeAreaStudioHealthConnectRepository(
+                observations = listOf(
+                    DomainObservation(
+                        id = "sleep_1",
+                        goalId = null,
+                        domain = LifeDomain.SLEEP,
+                        metric = ObservationMetric.SLEEP_HOURS,
+                        source = ObservationSource.WEARABLE,
+                        startedAt = Instant.parse("2026-03-10T23:00:00Z"),
+                        value = DomainObservationValue(numeric = 7.4f, unit = "h"),
+                        logicalDate = LocalDate.parse("2026-03-11"),
+                        sourceRecordId = "sleep_1",
+                        confidence = 0.9f,
+                        contextTags = setOf("health_connect"),
+                    ),
+                ),
+            ),
+            clock = clock,
+        )
+
+        val areaState = viewModel.state.first { it.areas.isNotEmpty() }.areas.getValue("sleep")
+
+        assertTrue(areaState.detail.hints.any { it.title == "Health Connect aktiv" })
+        assertEquals("Schlaf 7.4 h", areaState.sourceSetup?.headline)
+        assertEquals("Trennen", areaState.sourceSetup?.secondaryActionLabel)
     }
 
 }
@@ -387,4 +588,111 @@ private class FakeAreaStudioAreaKernelRepository(
         clearedSnapshots += areaId to date
         snapshotsFlow.value = snapshotsFlow.value.filterNot { it.areaId == areaId && it.date == date }
     }
+}
+
+private class FakeAreaStudioSourceBindingRepository(
+    bindings: List<AreaSourceBinding> = emptyList(),
+) : AreaSourceBindingRepository {
+    private val bindingsFlow = MutableStateFlow(bindings)
+    val boundHistory = mutableListOf<AreaSourceBinding>()
+    val unboundHistory = mutableListOf<AreaSourceBinding>()
+
+    override fun observeAll(): Flow<List<AreaSourceBinding>> = bindingsFlow
+
+    override fun observeByArea(areaId: String): Flow<List<AreaSourceBinding>> {
+        return flowOf(bindingsFlow.value.filter { it.areaId == areaId })
+    }
+
+    override suspend fun loadAll(): List<AreaSourceBinding> = bindingsFlow.value
+
+    override suspend fun bind(areaId: String, source: DataSourceKind) {
+        val binding = AreaSourceBinding(areaId = areaId, source = source)
+        boundHistory += binding
+        bindingsFlow.value = bindingsFlow.value
+            .filterNot { it.areaId == areaId && it.source == source } + binding
+    }
+
+    override suspend fun unbind(areaId: String, source: DataSourceKind) {
+        val binding = AreaSourceBinding(areaId = areaId, source = source)
+        unboundHistory += binding
+        bindingsFlow.value = bindingsFlow.value.filterNot { it.areaId == areaId && it.source == source }
+    }
+
+    override suspend fun clearArea(areaId: String) {
+        bindingsFlow.value = bindingsFlow.value.filterNot { it.areaId == areaId }
+    }
+
+    override suspend fun clearAll() {
+        bindingsFlow.value = emptyList()
+    }
+}
+
+private class FakeAreaStudioSourceCapabilityRepository(
+    enabledSources: Set<DataSourceKind> = emptySet(),
+) : SourceCapabilityRepository {
+    private val profile = CapabilityProfile(
+        sources = DataSourceKind.entries.map { source ->
+            DataSourceCapability(
+                source = source,
+                label = source.name,
+                enabled = source in enabledSources || source == DataSourceKind.MANUAL,
+                available = true,
+                granted = source in enabledSources || source == DataSourceKind.MANUAL,
+                detail = "",
+            )
+        },
+    )
+
+    override fun observeProfile(): Flow<CapabilityProfile> = flowOf(profile)
+
+    override suspend fun loadProfile(): CapabilityProfile = profile
+
+    override suspend fun ensureSeeded() = Unit
+
+    override suspend fun setEnabled(source: DataSourceKind, enabled: Boolean) = Unit
+}
+
+private class FakeAreaStudioCalendarSignalRepository(
+    private val signals: List<CalendarSignal> = emptyList(),
+) : CalendarSignalRepository {
+    override fun observeToday(
+        date: LocalDate,
+        zoneId: ZoneId,
+    ): Flow<List<CalendarSignal>> = flowOf(signals)
+}
+
+private class FakeAreaStudioNotificationSignalRepository(
+    private val signals: List<NotificationSignal> = emptyList(),
+) : NotificationSignalRepository {
+    override fun observeToday(
+        date: LocalDate,
+        zoneId: ZoneId,
+    ): Flow<List<NotificationSignal>> = flowOf(signals)
+
+    override suspend fun upsert(
+        id: String,
+        packageName: String,
+        title: String,
+        text: String,
+        postedAt: Long,
+    ) = Unit
+
+    override suspend fun markRemoved(
+        id: String,
+        removedAt: Long,
+    ) = Unit
+
+    override suspend fun clearAll() = Unit
+}
+
+private class FakeAreaStudioHealthConnectRepository(
+    private val observations: List<DomainObservation> = emptyList(),
+) : HealthConnectRepository {
+    override val requiredPermissions: Set<String> = emptySet()
+
+    override suspend fun availability() = com.struperto.androidappdays.data.repository.HealthConnectAvailability.AVAILABLE
+
+    override suspend fun grantedPermissions(): Set<String> = emptySet()
+
+    override suspend fun readDailyObservations(logicalDate: LocalDate): List<DomainObservation> = observations
 }

@@ -7,10 +7,16 @@ import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import com.struperto.androidappdays.AppContainer
 import com.struperto.androidappdays.data.repository.AreaKernelRepository
+import com.struperto.androidappdays.data.repository.AreaSourceBindingRepository
+import com.struperto.androidappdays.data.repository.CalendarSignalRepository
 import com.struperto.androidappdays.data.repository.CreateAreaInstanceDraft
+import com.struperto.androidappdays.data.repository.HealthConnectRepository
+import com.struperto.androidappdays.data.repository.NotificationSignalRepository
 import com.struperto.androidappdays.data.repository.PlanRepository
-import java.time.Instant
+import com.struperto.androidappdays.data.repository.SourceCapabilityRepository
+import com.struperto.androidappdays.domain.DataSourceKind
 import java.time.Clock
+import java.time.Instant
 import java.time.LocalDate
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.combine
@@ -19,7 +25,12 @@ import kotlinx.coroutines.launch
 
 class StartViewModel(
     private val areaKernelRepository: AreaKernelRepository,
+    private val areaSourceBindingRepository: AreaSourceBindingRepository,
     private val planRepository: PlanRepository,
+    private val sourceCapabilityRepository: SourceCapabilityRepository,
+    private val calendarSignalRepository: CalendarSignalRepository,
+    private val notificationSignalRepository: NotificationSignalRepository,
+    private val healthConnectRepository: HealthConnectRepository,
     private val clock: Clock,
 ) : ViewModel() {
     private val today: LocalDate
@@ -28,13 +39,16 @@ class StartViewModel(
     private val todayIso: String
         get() = today.toString()
 
+    private val zoneId
+        get() = clock.zone
+
     private val activeInstances = areaKernelRepository.observeActiveInstances().stateIn(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(5_000),
         initialValue = emptyList(),
     )
 
-    val state = combine(
+    private val baseOverviewState = combine(
         activeInstances,
         areaKernelRepository.observeSnapshots(LocalDate.parse(todayIso)),
         planRepository.observeToday(todayIso),
@@ -48,6 +62,29 @@ class StartViewModel(
                 projectionTime = Instant.now(clock),
             ),
         )
+    }
+
+    val state = combine(
+        baseOverviewState,
+        areaSourceBindingRepository.observeAll(),
+        sourceCapabilityRepository.observeProfile(),
+        calendarSignalRepository.observeToday(today, zoneId),
+        notificationSignalRepository.observeToday(today, zoneId),
+    ) { baseState, bindings, capabilityProfile, calendarSignals, notificationSignals ->
+        val healthObservations = if (capabilityProfile.isUsable(DataSourceKind.HEALTH_CONNECT)) {
+            healthConnectRepository.readDailyObservations(today)
+        } else {
+            emptyList()
+        }
+        overlayOverviewWithSources(
+            state = baseState,
+            bindings = bindings,
+            capabilityProfile = capabilityProfile,
+            calendarSignals = calendarSignals,
+            notificationSignals = notificationSignals,
+            healthObservations = healthObservations,
+            zoneId = zoneId,
+        )
     }.stateIn(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(5_000),
@@ -60,6 +97,7 @@ class StartViewModel(
         templateId: String,
         iconKey: String,
         behaviorClass: com.struperto.androidappdays.domain.area.AreaBehaviorClass,
+        sourceKind: DataSourceKind?,
         onCreated: (String) -> Unit,
     ) {
         viewModelScope.launch {
@@ -72,12 +110,19 @@ class StartViewModel(
                     behaviorClass = behaviorClass,
                 ),
             )
+            sourceKind?.let { source ->
+                areaSourceBindingRepository.bind(
+                    areaId = areaId.areaId,
+                    source = source,
+                )
+            }
             onCreated(areaId.areaId)
         }
     }
 
     fun deleteArea(areaId: String) {
         viewModelScope.launch {
+            areaSourceBindingRepository.clearArea(areaId)
             areaKernelRepository.deleteActiveInstance(areaId)
         }
     }
@@ -131,7 +176,12 @@ class StartViewModel(
             initializer {
                 StartViewModel(
                     areaKernelRepository = appContainer.areaKernelRepository,
+                    areaSourceBindingRepository = appContainer.areaSourceBindingRepository,
                     planRepository = appContainer.planRepository,
+                    sourceCapabilityRepository = appContainer.sourceCapabilityRepository,
+                    calendarSignalRepository = appContainer.calendarSignalRepository,
+                    notificationSignalRepository = appContainer.notificationSignalRepository,
+                    healthConnectRepository = appContainer.healthConnectRepository,
                     clock = appContainer.clock,
                 )
             }

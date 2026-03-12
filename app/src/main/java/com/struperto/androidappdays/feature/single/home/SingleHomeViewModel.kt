@@ -9,7 +9,10 @@ import com.struperto.androidappdays.AppContainer
 import com.struperto.androidappdays.data.repository.DateContext
 import com.struperto.androidappdays.data.repository.GoalRepository
 import com.struperto.androidappdays.data.repository.HourSlotEntryRepository
+import com.struperto.androidappdays.data.repository.AreaSourceBinding
+import com.struperto.androidappdays.data.repository.AreaSourceBindingRepository
 import com.struperto.androidappdays.data.repository.AreaKernelRepository
+import com.struperto.androidappdays.data.repository.CalendarSignalRepository
 import com.struperto.androidappdays.data.repository.LearningEvent
 import com.struperto.androidappdays.data.repository.LearningEventRepository
 import com.struperto.androidappdays.data.repository.LearningEventType
@@ -43,7 +46,9 @@ import com.struperto.androidappdays.domain.area.AreaInstance
 import com.struperto.androidappdays.domain.area.AreaSnapshot
 import com.struperto.androidappdays.domain.area.AreaTodayOutput
 import com.struperto.androidappdays.domain.area.AreaTodayOutputInput
+import com.struperto.androidappdays.domain.area.projectCalendarAreaTodayOutput
 import com.struperto.androidappdays.domain.area.projectAreaTodayOutput
+import com.struperto.androidappdays.domain.area.resolveCalendarAreaSlice
 import com.struperto.androidappdays.domain.service.EvaluationEngineV0
 import com.struperto.androidappdays.domain.service.HomeDomainHintProjector
 import com.struperto.androidappdays.domain.service.ObservationSyncService
@@ -67,6 +72,8 @@ class SingleHomeViewModel(
     private val userFingerprintRepository: UserFingerprintRepository,
     private val lifeWheelRepository: LifeWheelRepository,
     private val areaKernelRepository: AreaKernelRepository,
+    private val areaSourceBindingRepository: AreaSourceBindingRepository,
+    private val calendarSignalRepository: CalendarSignalRepository,
     private val learningEventRepository: LearningEventRepository,
     private val planRepository: PlanRepository,
     private val goalRepository: GoalRepository,
@@ -136,11 +143,20 @@ class SingleHomeViewModel(
 
     private val activeAreaInstances = areaKernelRepository.observeActiveInstances()
     private val activeAreaSnapshots = areaKernelRepository.observeSnapshots(today)
+    private val areaSourceBindings = areaSourceBindingRepository.observeAll()
+    private val areaCalendarSignals = calendarSignalRepository.observeToday(today, clock.zone)
     private val areaKernelInputs = combine(
         activeAreaInstances,
         activeAreaSnapshots,
     ) { areaInstances, areaSnapshots ->
         areaInstances to areaSnapshots
+    }
+    private val areaSourceInputs = combine(
+        areaKernelInputs,
+        areaSourceBindings,
+        areaCalendarSignals,
+    ) { kernelInputs, bindings, calendarSignals ->
+        Triple(kernelInputs, bindings, calendarSignals)
     }
     private val lifeAreaInputs = combine(
         lifeWheelRepository.observeDailyChecks(todayIso),
@@ -154,15 +170,21 @@ class SingleHomeViewModel(
         daySignals,
         behaviorInputs,
         lifeAreaInputs,
-        areaKernelInputs,
+        areaSourceInputs,
     ) { fingerprint: UserFingerprint,
         signals: List<SignalEnvelope>,
         behavior: BehaviorInput,
         lifeAreaInputs: Pair<List<com.struperto.androidappdays.data.repository.LifeAreaDailyCheck>, List<LifeArea>>,
-        areaKernelInputs: Pair<List<AreaInstance>, List<AreaSnapshot>>,
+        areaSourceInputs: Triple<
+            Pair<List<AreaInstance>, List<AreaSnapshot>>,
+            List<AreaSourceBinding>,
+            List<com.struperto.androidappdays.data.repository.CalendarSignal>,
+            >,
     ->
         val (dailyChecks, activeAreas) = lifeAreaInputs
+        val (areaKernelInputs, areaBindings, calendarSignals) = areaSourceInputs
         val (areaInstances, areaSnapshots) = areaKernelInputs
+        val projectionTime = java.time.Instant.now(clock)
         HomeInput(
             fingerprint = fingerprint,
             signals = signals,
@@ -176,19 +198,41 @@ class SingleHomeViewModel(
             dailyChecks = dailyChecks,
             lifeAreas = activeAreas,
             areaTodayOutputs = areaInstances.map { instance ->
-                projectAreaTodayOutput(
+                val areaPlans = behavior.todayPlans.filter { it.areaId == instance.areaId && !it.isDone }
+                val baseOutput = projectAreaTodayOutput(
                     AreaTodayOutputInput(
                         definition = com.struperto.androidappdays.domain.area.startAreaKernelDefinition(instance.definitionId),
                         blueprint = com.struperto.androidappdays.domain.area.startAreaKernelBlueprint(instance.definitionId),
                         instance = instance,
                         snapshot = areaSnapshots.firstOrNull { it.areaId == instance.areaId },
-                        generatedAt = java.time.Instant.now(clock),
-                        openPlanTitles = behavior.todayPlans
-                            .filter { it.areaId == instance.areaId && !it.isDone }
-                            .map { it.title },
-                        dueCount = behavior.todayPlans.count { it.areaId == instance.areaId && !it.isDone },
+                        generatedAt = projectionTime,
+                        openPlanTitles = areaPlans.map { it.title },
+                        dueCount = areaPlans.size,
                     ),
                 )
+                val calendarSlice = resolveCalendarAreaSlice(
+                    title = instance.title,
+                    summary = instance.summary,
+                    iconKey = instance.iconKey,
+                    templateId = instance.templateId,
+                    behaviorClass = baseOutput.behaviorClass,
+                    boundSources = areaBindings
+                        .filter { binding -> binding.areaId == instance.areaId }
+                        .mapTo(linkedSetOf()) { binding -> binding.source },
+                    capabilityProfile = behavior.domainInput.capabilityProfile,
+                    calendarSignals = calendarSignals,
+                )
+                if (calendarSlice != null) {
+                    projectCalendarAreaTodayOutput(
+                        baseOutput = baseOutput,
+                        areaTitle = instance.title,
+                        slice = calendarSlice,
+                        generatedAt = projectionTime,
+                        zoneId = clock.zone,
+                    )
+                } else {
+                    baseOutput
+                }
             },
         )
     }
@@ -323,6 +367,8 @@ class SingleHomeViewModel(
                     userFingerprintRepository = appContainer.userFingerprintRepository,
                     lifeWheelRepository = appContainer.lifeWheelRepository,
                     areaKernelRepository = appContainer.areaKernelRepository,
+                    areaSourceBindingRepository = appContainer.areaSourceBindingRepository,
+                    calendarSignalRepository = appContainer.calendarSignalRepository,
                     learningEventRepository = appContainer.learningEventRepository,
                     planRepository = appContainer.planRepository,
                     goalRepository = appContainer.goalRepository,

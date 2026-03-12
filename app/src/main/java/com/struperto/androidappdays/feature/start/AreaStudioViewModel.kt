@@ -7,7 +7,12 @@ import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import com.struperto.androidappdays.AppContainer
 import com.struperto.androidappdays.data.repository.AreaKernelRepository
+import com.struperto.androidappdays.data.repository.AreaSourceBindingRepository
+import com.struperto.androidappdays.data.repository.CalendarSignalRepository
+import com.struperto.androidappdays.data.repository.HealthConnectRepository
+import com.struperto.androidappdays.data.repository.NotificationSignalRepository
 import com.struperto.androidappdays.data.repository.PlanRepository
+import com.struperto.androidappdays.data.repository.SourceCapabilityRepository
 import com.struperto.androidappdays.domain.area.AreaComplexityLevel
 import com.struperto.androidappdays.domain.area.AreaDirectionMode
 import com.struperto.androidappdays.domain.area.AreaFlowProfile
@@ -29,6 +34,7 @@ import kotlin.math.roundToInt
 data class AreaStudioAreaState(
     val detail: StartAreaDetailState,
     val authoring: AreaAuthoringStudioState,
+    val sourceSetup: AreaSourceSetupState? = null,
 )
 
 data class AreaStudioUiState(
@@ -37,10 +43,16 @@ data class AreaStudioUiState(
 
 class AreaStudioViewModel(
     private val areaKernelRepository: AreaKernelRepository,
+    private val areaSourceBindingRepository: AreaSourceBindingRepository,
     private val planRepository: PlanRepository,
+    private val sourceCapabilityRepository: SourceCapabilityRepository,
+    private val calendarSignalRepository: CalendarSignalRepository,
+    private val notificationSignalRepository: NotificationSignalRepository,
+    private val healthConnectRepository: HealthConnectRepository,
     private val clock: Clock,
 ) : ViewModel() {
     private val today = LocalDate.now(clock)
+    private val zoneId = clock.zone
     private val activeInstances = areaKernelRepository.observeActiveInstances().stateIn(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(5_000),
@@ -57,35 +69,76 @@ class AreaStudioViewModel(
         initialValue = emptyList(),
     )
 
-    val state = combine(
+    private val baseState = combine(
         activeInstances,
         todaySnapshots,
         todayPlans,
     ) { instances, snapshots, plans ->
         val snapshotMap = snapshots.associateBy(AreaSnapshot::areaId)
-        AreaStudioUiState(
-            areas = instances
-                .sortedBy(AreaInstance::sortOrder)
-                .associate { instance ->
-                    val detailInput = buildStartAreaDetailKernelInput(
-                        instance = instance,
-                        snapshot = snapshotMap[instance.areaId],
-                        todayPlans = plans,
-                        logicalDate = today,
-                        projectionTime = Instant.now(clock),
-                    )
-                    instance.areaId to AreaStudioAreaState(
-                        detail = projectStartAreaDetailState(detailInput),
-                        authoring = projectAreaAuthoringStudioState(
-                            AreaAuthoringProjectionInput(
-                                definition = detailInput.definition,
-                                blueprint = detailInput.blueprint,
-                                instance = instance,
-                                authoringConfig = instance.authoringConfig,
-                            ),
+        instances
+            .sortedBy(AreaInstance::sortOrder)
+            .associate { instance ->
+                val detailInput = buildStartAreaDetailKernelInput(
+                    instance = instance,
+                    snapshot = snapshotMap[instance.areaId],
+                    todayPlans = plans,
+                    logicalDate = today,
+                    projectionTime = Instant.now(clock),
+                )
+                instance.areaId to Pair(
+                    projectStartAreaDetailState(detailInput),
+                    projectAreaAuthoringStudioState(
+                        AreaAuthoringProjectionInput(
+                            definition = detailInput.definition,
+                            blueprint = detailInput.blueprint,
+                            instance = instance,
+                            authoringConfig = instance.authoringConfig,
                         ),
-                    )
-                },
+                    ),
+                )
+            }
+    }
+
+    val state = combine(
+        baseState,
+        areaSourceBindingRepository.observeAll(),
+        sourceCapabilityRepository.observeProfile(),
+        calendarSignalRepository.observeToday(today, zoneId),
+        notificationSignalRepository.observeToday(today, zoneId),
+    ) { projectedAreas, bindings, capabilityProfile, calendarSignals, notificationSignals ->
+        val healthObservations = if (capabilityProfile.isUsable(com.struperto.androidappdays.domain.DataSourceKind.HEALTH_CONNECT)) {
+            healthConnectRepository.readDailyObservations(today)
+        } else {
+            emptyList()
+        }
+        val bindingsByAreaId = bindings.groupBy { it.areaId }
+        AreaStudioUiState(
+            areas = projectedAreas.mapValues { (areaId, projected) ->
+                val (baseDetail, authoring) = projected
+                val areaBindings = bindingsByAreaId[areaId].orEmpty()
+                val detail = overlayDetailWithSources(
+                    detail = baseDetail,
+                    bindings = areaBindings,
+                    capabilityProfile = capabilityProfile,
+                    calendarSignals = calendarSignals,
+                    notificationSignals = notificationSignals,
+                    healthObservations = healthObservations,
+                    zoneId = zoneId,
+                )
+                AreaStudioAreaState(
+                    detail = detail,
+                    authoring = authoring,
+                    sourceSetup = buildAreaSourceSetupState(
+                        detail = detail,
+                        bindings = areaBindings,
+                        capabilityProfile = capabilityProfile,
+                        calendarSignals = calendarSignals,
+                        notificationSignals = notificationSignals,
+                        healthObservations = healthObservations,
+                        zoneId = zoneId,
+                    ),
+                )
+            },
         )
     }.stateIn(
         scope = viewModelScope,
@@ -220,6 +273,30 @@ class AreaStudioViewModel(
             areaKernelRepository.clearSnapshot(
                 areaId = areaId,
                 date = today,
+            )
+        }
+    }
+
+    fun bindSource(
+        areaId: String,
+        source: com.struperto.androidappdays.domain.DataSourceKind,
+    ) {
+        viewModelScope.launch {
+            areaSourceBindingRepository.bind(
+                areaId = areaId,
+                source = source,
+            )
+        }
+    }
+
+    fun unbindSource(
+        areaId: String,
+        source: com.struperto.androidappdays.domain.DataSourceKind,
+    ) {
+        viewModelScope.launch {
+            areaSourceBindingRepository.unbind(
+                areaId = areaId,
+                source = source,
             )
         }
     }
@@ -399,7 +476,12 @@ class AreaStudioViewModel(
             initializer {
                 AreaStudioViewModel(
                     areaKernelRepository = appContainer.areaKernelRepository,
+                    areaSourceBindingRepository = appContainer.areaSourceBindingRepository,
                     planRepository = appContainer.planRepository,
+                    sourceCapabilityRepository = appContainer.sourceCapabilityRepository,
+                    calendarSignalRepository = appContainer.calendarSignalRepository,
+                    notificationSignalRepository = appContainer.notificationSignalRepository,
+                    healthConnectRepository = appContainer.healthConnectRepository,
                     clock = appContainer.clock,
                 )
             }

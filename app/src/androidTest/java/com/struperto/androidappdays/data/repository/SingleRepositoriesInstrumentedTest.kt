@@ -27,6 +27,7 @@ class SingleRepositoriesInstrumentedTest {
     private lateinit var vorhabenRepository: VorhabenRepository
     private lateinit var planRepository: PlanRepository
     private lateinit var userFingerprintRepository: UserFingerprintRepository
+    private lateinit var areaSourceBindingRepository: AreaSourceBindingRepository
 
     private val clock = Clock.fixed(
         Instant.parse("2026-03-07T09:00:00Z"),
@@ -72,6 +73,10 @@ class SingleRepositoriesInstrumentedTest {
             dao = database.userFingerprintDao(),
             lifeWheelDao = database.lifeWheelDao(),
             learningEventDao = database.learningEventDao(),
+            clock = clock,
+        )
+        areaSourceBindingRepository = RoomAreaSourceBindingRepository(
+            dao = database.areaSourceBindingDao(),
             clock = clock,
         )
     }
@@ -193,6 +198,20 @@ class SingleRepositoriesInstrumentedTest {
         lifeWheelRepository.ensureSeededAreas()
 
         assertTrue(lifeWheelRepository.observeActiveAreas().first().none { it.id == "vitality" })
+    }
+
+    @Test
+    fun areaSourceBinding_roundTripsThroughRoomRepository() = runBlocking {
+        areaSourceBindingRepository.bind(
+            areaId = "home",
+            source = com.struperto.androidappdays.domain.DataSourceKind.CALENDAR,
+        )
+
+        val bindings = areaSourceBindingRepository.observeByArea("home").first()
+
+        assertEquals(1, bindings.size)
+        assertEquals("home", bindings.single().areaId)
+        assertEquals(com.struperto.androidappdays.domain.DataSourceKind.CALENDAR, bindings.single().source)
     }
 
     @Test
