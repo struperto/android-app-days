@@ -82,8 +82,8 @@ fun AppNavHost(
                     CircularProgressIndicator()
                     Text(
                         text = bootstrapState.lastErrorMessage
-                            ?.let { "Startinitialisierung fehlgeschlagen: $it" }
-                            ?: "Days initialisiert Start und Quellen.",
+                            ?.let { "Start fehlgeschlagen: $it" }
+                            ?: "Days wird geladen ...",
                         style = MaterialTheme.typography.bodyMedium,
                     )
                 }
@@ -114,6 +114,9 @@ fun AppNavHost(
                         iconKey = draft.iconKey,
                         behaviorClass = draft.behaviorClass,
                         sourceKind = draft.sourceKind,
+                        skills = draft.selectedSkills,
+                        tileDisplayMode = draft.tileDisplayMode,
+                        familyKey = draft.familyKey,
                     ) { areaId ->
                         navController.navigate(startAreaRoute(areaId))
                     }
@@ -148,6 +151,10 @@ fun AppNavHost(
                 areaId = areaId,
                 onBack = navController::popBackStack,
                 onOpenSourceSettings = { navController.navigate(AppDestination.SettingsSources.route) },
+                onDeleteArea = { id ->
+                    viewModel.deleteArea(id)
+                    navController.popBackStack()
+                },
                 onTargetScoreChange = viewModel::setTargetScore,
                 onManualScoreChange = viewModel::setManualScore,
                 onManualStateChange = viewModel::setManualState,

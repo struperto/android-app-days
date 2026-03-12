@@ -9,7 +9,7 @@ plugins {
 subprojects {
     plugins.withId("org.jetbrains.kotlin.android") {
         extensions.configure<KotlinAndroidProjectExtension> {
-            jvmToolchain(17)
+            jvmToolchain(21)
         }
     }
 }

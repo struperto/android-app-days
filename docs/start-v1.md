@@ -2,8 +2,6 @@
 
 `Start` is the life-area mode of `Days`.
 
-This file replaces earlier parallel notes about the start area model and dashboard matrix.
-
 ## Purpose
 
 `Start` is a calm local-first overview of meaningful life areas.
@@ -20,7 +18,8 @@ It should not:
 
 ## Current shell
 
-`Start` uses one large overview surface with a fixed 4x4 area grid.
+`Start` uses an adaptive grid overview with user-created areas.
+Areas are fully user-creatable via a guided Create-Flow.
 
 Rules:
 - only large tiles
@@ -29,66 +28,92 @@ Rules:
 - no helper prose on first read
 - area titles sit below or clearly separated from the icon surface
 
-## Current seeded areas
-
-The current fixed area set is:
-- `Vitalitaet`
-- `Fokus`
-- `Arbeit`
-- `Partnerschaft`
-- `Familie`
-- `Freundschaft`
-- `Netzwerk`
-- `Zuhause`
-- `Sicherheit`
-- `Erholung`
-- `Entwicklung`
-- `Lernen`
-- `Kreativitaet`
-- `Freude`
-- `Sinn`
-- `Neues`
-
-This set is a useful seed, not a permanent taxonomy.
-
 ## Area model
 
-Each area should be representable with:
-- stable `id`
-- title
-- icon
-- short meaning or summary
-- overview mode: `signal`, `plan`, or `reflection`
-- current state semantic
-- progress or directional cue
-- next useful step
+Each area is representable with:
+- stable `areaId`
+- title and summary
+- icon (`iconKey`) and template (`templateId`)
+- `behaviorClass` (TRACKING, PROGRESS, RELATIONSHIP, MAINTENANCE, PROTECTION, REFLECTION)
+- `tileDisplayMode` (AMPEL, SCORE, SHORT_TEXT, LATEST_NAME, COUNT, TREND)
+- `familyKey` (Radar, Pflicht, Routine, Kontakt, Gesundheit, Ort, Sammlung)
+- bound skills (`Set<AreaSkillKind>`)
+- current snapshot (manualScore, manualStateKey, manualNote)
+- authoring config (lageMode, directionMode, sourcesMode, flowProfile, etc.)
 
-Areas must stay user-editable and later user-creatable without changing the shell.
+Areas are fully user-editable and user-creatable.
 
-## Detail contract
+## Skill system
 
-Opening an area keeps the same visual language.
+Each area can bind any number of **Skills** from a fixed registry of 12:
 
-The detail surface should have:
-- one calm identity tile first
-- one work tile below it
-- three next levels:
-  - `Status`
-  - `Experiment`
-  - `Automatik`
+| Skill | Key | Permission | Data source |
+|-------|-----|-----------|-------------|
+| Gesundheit | `health_tracking` | Health Connect | HealthConnectRepository |
+| Kalender | `calendar_watch` | READ_CALENDAR | CalendarSignalRepository |
+| Benachrichtigungen | `notification_filter` | Notification Listener | NotificationSignalRepository |
+| Manuell | `manual_log` | none | local |
+| Screenshots | `screenshot_reader` | READ_MEDIA_IMAGES | ScreenshotRepository |
+| Fotos | `photo_stream` | READ_MEDIA_IMAGES | PhotoStreamRepository |
+| Kontakte | `contact_watch` | READ_CONTACTS | ContactWatchRepository |
+| App-Nutzung | `app_usage` | PACKAGE_USAGE_STATS | AppUsageRepository |
+| Website | `website_reader` | none | WebsiteReaderRepository |
+| Podcast | `podcast_follow` | none | PodcastFollowRepository |
+| Standort | `location_context` | ACCESS_FINE_LOCATION | LocationContextRepository |
+| Checkliste | `checklist` | none | ChecklistRepository |
 
-Complex editing or setup should move into focused screens instead of being compressed into oversized sheets.
+Skills that map to a legacy `DataSourceKind` (health, calendar, notifications, manual) also auto-sync the legacy `area_source_bindings` table via a bridge in `RoomAreaSkillBindingRepository`.
 
-## Data realism
+Skills requiring config (Website, Podcast, Location) store their configuration in `configJson` on the `area_skill_bindings` table.
 
-Not every area is equally live or equally measurable.
+## Create-Flow
 
-Use three overview modes:
-- `signal`: current condition, trend, drift
-- `plan`: progress, next step, review rhythm
-- `reflection`: last care, direction, next impulse
+The Create-Flow has three surfaces:
 
-Do not pretend reflective areas are live telemetry when they are not.
+1. **CreateCapture** — Input kind (Text, Link, Screenshot, App, Kontakt, Ort) + free text + auto-generated suggestions
+2. **CreateConfirm** — Title, meaning, behavior class, skill selection (FlowRow chips for all 12 skills), identity link
+3. **CreateOptions** — Template and icon selection
+
+`inferPrimaryIntent()` maps German keywords to skill sets:
+- "kalender"/"termin" -> CALENDAR_WATCH
+- "screenshot"/"bild" -> SCREENSHOT_READER
+- "podcast"/"feed" -> PODCAST_FOLLOW
+- "nachricht"/"kontakt" -> NOTIFICATION_FILTER + CONTACT_WATCH
+- "gesund"/"schlaf" -> HEALTH_TRACKING
+- "ort"/"zuhause" -> LOCATION_CONTEXT
+- Link input -> WEBSITE_READER
+
+After area creation, `StartViewModel.createArea()` binds all selected skills via `areaSkillBindingRepository.bind()`.
+
+## Tile rendering
+
+Tiles show family-colored gradients with:
+- icon + family label (top row)
+- title + short status (middle)
+- action label + arrow (bottom)
+
+`tileDisplayMode` controls the status display (currently resolved via `startAreaTileStatusLine()`; per-mode rendering is scaffolded but not yet visually differentiated).
+
+`familyKey` is resolved from DB first, with keyword-heuristic fallback for older areas.
+
+## Detail contract (AreaStudio)
+
+Opening an area shows the AreaStudio with four panels:
+- **Blick/Stand** (Snapshot) — today's state, manual score, manual note
+- **Fokus/Naechster Zug** (Path) — direction, focus track
+- **Quellen/Signale** (Sources) — bound skills and source setup
+- **Takt/Rhythmus** (Options) — cadence, flow profile, reminders
+
+Panel labels adapt per family.
+
+## Database
+
+- `area_instances` — core area data (v15: +tileDisplayMode, +familyKey columns)
+- `area_skill_bindings` — skill-to-area bindings (new in v15)
+- `checklist_items` — per-area checklists (new in v15)
+- `area_source_bindings` — legacy source bindings (kept in sync via bridge)
+
+Migration v14->v15 creates new tables and migrates existing source bindings to skill bindings.
 
 ## Non-goals
 

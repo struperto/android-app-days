@@ -54,6 +54,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.struperto.androidappdays.domain.DataSourceKind
 import com.struperto.androidappdays.domain.area.AreaBehaviorClass
+import com.struperto.androidappdays.domain.area.AreaSkillKind
+import com.struperto.androidappdays.domain.area.TileDisplayMode
 import com.struperto.androidappdays.domain.area.defaultBehaviorClassForTemplate
 import com.struperto.androidappdays.feature.single.shared.DaysMetaPill
 import com.struperto.androidappdays.navigation.AppDestination
@@ -77,6 +79,9 @@ data class CreateAreaDraft(
     val iconKey: String,
     val behaviorClass: AreaBehaviorClass,
     val sourceKind: DataSourceKind? = null,
+    val selectedSkills: Set<AreaSkillKind> = emptySet(),
+    val tileDisplayMode: TileDisplayMode = TileDisplayMode.AMPEL,
+    val familyKey: String = "",
 )
 
 @Composable
@@ -106,6 +111,7 @@ fun StartScreen(
         mutableStateOf(defaultBehaviorClassForTemplate(DefaultCreateTemplateId))
     }
     var createSourceKind by rememberSaveable { mutableStateOf<DataSourceKind?>(null) }
+    var createSelectedSkills by rememberSaveable { mutableStateOf(emptySet<AreaSkillKind>()) }
     val createDraft = CreateAreaDraft(
         title = createTitle,
         meaning = createMeaning,
@@ -113,6 +119,7 @@ fun StartScreen(
         iconKey = createIconKey,
         behaviorClass = createBehaviorClass,
         sourceKind = createSourceKind,
+        selectedSkills = createSelectedSkills,
     )
     val areas = startAreaTiles(state)
     val suggestions = buildStartIntentSuggestions(
@@ -130,6 +137,7 @@ fun StartScreen(
         createIconKey = DefaultCreateIconKey
         createBehaviorClass = defaultBehaviorClassForTemplate(DefaultCreateTemplateId)
         createSourceKind = null
+        createSelectedSkills = emptySet()
     }
 
     fun applySuggestion(suggestion: StartIntentSuggestion) {
@@ -139,6 +147,7 @@ fun StartScreen(
         createIconKey = suggestion.iconKey
         createBehaviorClass = suggestion.behaviorClass
         createSourceKind = suggestion.sourceKind
+        createSelectedSkills = suggestion.skills
         selectedSuggestionId = suggestion.id
     }
 
@@ -164,8 +173,8 @@ fun StartScreen(
                         ?: suggestions.firstOrNull()
                     if (suggestion != null) {
                         applySuggestion(suggestion)
+                        activeSurface = StartSurface.CreateConfirm
                     }
-                    activeSurface = StartSurface.CreateConfirm
                 },
             )
             return
@@ -183,6 +192,13 @@ fun StartScreen(
                 onMeaningChange = { createMeaning = it },
                 onBehaviorClassChange = { createBehaviorClass = it },
                 onSourceKindChange = { createSourceKind = it },
+                onSkillToggle = { skill ->
+                    createSelectedSkills = if (skill in createSelectedSkills) {
+                        createSelectedSkills - skill
+                    } else {
+                        createSelectedSkills + skill
+                    }
+                },
                 onOpenIdentityOptions = { activeSurface = StartSurface.CreateOptions },
                 onCreate = {
                     val templateSummary = startAreaTemplate(createTemplateId).summary
@@ -401,12 +417,12 @@ private fun EmptyStartState(
                         verticalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
                         Text(
-                            text = "Ein leerer Start kann gross denken.",
+                            text = "Noch kein Bereich angelegt.",
                             style = MaterialTheme.typography.headlineSmall,
                             color = AppTheme.colors.ink,
                         )
                         Text(
-                            text = "Spiele den ersten Bereich ueber Text, Link, Bild, App, Kontakt oder Ort ein. Die Form bleibt ruhig, der Einstieg darf neugierig sein.",
+                            text = "Erstelle deinen ersten Bereich. Beschreibe kurz, was du im Blick behalten willst — Days schlaegt passende Einstellungen vor.",
                             style = MaterialTheme.typography.bodyMedium,
                             color = AppTheme.colors.muted,
                         )
@@ -435,7 +451,7 @@ private fun EmptyStartState(
                             modifier = Modifier.size(18.dp),
                         )
                         Text(
-                            text = "Ersten Bereich anlegen",
+                            text = "Bereich erstellen",
                             modifier = Modifier.padding(start = 8.dp),
                         )
                     }
@@ -455,7 +471,6 @@ private fun StartAreaGridTile(
         hintTone = area.primaryHint.tone,
     )
     val shortStatus = startAreaTileStatusLine(
-        family = area.family,
         hint = area.primaryHint,
         todayLabel = area.todayLabel,
         summary = area.summary,

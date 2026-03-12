@@ -7,6 +7,7 @@ import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import com.struperto.androidappdays.AppContainer
 import com.struperto.androidappdays.data.repository.AreaKernelRepository
+import com.struperto.androidappdays.data.repository.AreaSkillBindingRepository
 import com.struperto.androidappdays.data.repository.AreaSourceBindingRepository
 import com.struperto.androidappdays.data.repository.CalendarSignalRepository
 import com.struperto.androidappdays.data.repository.HealthConnectRepository
@@ -21,6 +22,7 @@ import com.struperto.androidappdays.domain.area.AreaLageMode
 import com.struperto.androidappdays.domain.area.AreaSnapshot
 import com.struperto.androidappdays.domain.area.AreaSourcesMode
 import com.struperto.androidappdays.domain.area.AreaVisibilityLevel
+import com.struperto.androidappdays.domain.area.TileDisplayMode
 import com.struperto.androidappdays.domain.area.withUpdatedIdentity
 import java.time.Clock
 import java.time.Instant
@@ -44,6 +46,7 @@ data class AreaStudioUiState(
 class AreaStudioViewModel(
     private val areaKernelRepository: AreaKernelRepository,
     private val areaSourceBindingRepository: AreaSourceBindingRepository,
+    private val areaSkillBindingRepository: AreaSkillBindingRepository,
     private val planRepository: PlanRepository,
     private val sourceCapabilityRepository: SourceCapabilityRepository,
     private val calendarSignalRepository: CalendarSignalRepository,
@@ -451,6 +454,26 @@ class AreaStudioViewModel(
         }
     }
 
+    fun setTileDisplayMode(areaId: String, mode: TileDisplayMode) {
+        updateProfile(areaId) { it.copy(tileDisplayMode = mode) }
+    }
+
+    fun setFamilyKey(areaId: String, familyKey: String) {
+        updateProfile(areaId) { it.copy(familyKey = familyKey) }
+    }
+
+    fun deleteArea(areaId: String) {
+        viewModelScope.launch {
+            try {
+                areaSkillBindingRepository.clearArea(areaId)
+                areaSourceBindingRepository.clearArea(areaId)
+                areaKernelRepository.deleteActiveInstance(areaId)
+            } catch (_: Exception) {
+                // silent — UI stays consistent via observed flow
+            }
+        }
+    }
+
     private fun updateProfile(
         areaId: String,
         transform: (AreaInstance) -> AreaInstance,
@@ -477,6 +500,7 @@ class AreaStudioViewModel(
                 AreaStudioViewModel(
                     areaKernelRepository = appContainer.areaKernelRepository,
                     areaSourceBindingRepository = appContainer.areaSourceBindingRepository,
+                    areaSkillBindingRepository = appContainer.areaSkillBindingRepository,
                     planRepository = appContainer.planRepository,
                     sourceCapabilityRepository = appContainer.sourceCapabilityRepository,
                     calendarSignalRepository = appContainer.calendarSignalRepository,

@@ -25,6 +25,8 @@ import androidx.compose.material.icons.outlined.PersonOutline
 import androidx.compose.material.icons.outlined.PhotoLibrary
 import androidx.compose.material.icons.outlined.TextSnippet
 import androidx.compose.material.icons.outlined.Widgets
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -44,6 +46,10 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.struperto.androidappdays.domain.DataSourceKind
 import com.struperto.androidappdays.domain.area.AreaBehaviorClass
+import com.struperto.androidappdays.domain.area.AreaSkillKind
+import com.struperto.androidappdays.domain.area.TileDisplayMode
+import com.struperto.androidappdays.domain.area.skillDefinition
+import com.struperto.androidappdays.domain.area.skillsForKeywords
 import com.struperto.androidappdays.feature.single.shared.ChoiceChipItem
 import com.struperto.androidappdays.feature.single.shared.ChoiceChipRow
 import com.struperto.androidappdays.feature.single.shared.DaysMetaPill
@@ -109,6 +115,7 @@ data class StartIntentSuggestion(
     val iconKey: String,
     val behaviorClass: AreaBehaviorClass,
     val sourceKind: DataSourceKind? = null,
+    val skills: Set<AreaSkillKind> = emptySet(),
     val modeLabel: String,
     val hintLabel: String,
 )
@@ -128,7 +135,7 @@ fun StartCreateScreen(
     val selectedSuggestion = suggestions.firstOrNull { it.id == selectedSuggestionId } ?: suggestions.firstOrNull()
 
     DaysPageScaffold(
-        title = "Bereich einspielen",
+        title = "Neuer Bereich",
         onBack = onBack,
         modifier = Modifier.testTag("start-create-screen"),
     ) {
@@ -185,7 +192,7 @@ fun StartCreateScreen(
                 verticalArrangement = Arrangement.spacedBy(10.dp),
             ) {
                 Text(
-                    text = "Mögliche Richtungen",
+                    text = "Vorschlaege",
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.SemiBold,
                 )
@@ -206,11 +213,12 @@ fun StartCreateScreen(
                 .fillMaxWidth()
                 .testTag("start-create-next"),
         ) {
-            Text("Vorschlag pruefen")
+            Text("Weiter")
         }
     }
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun StartCreateConfirmScreen(
     draft: CreateAreaDraft,
@@ -222,6 +230,7 @@ fun StartCreateConfirmScreen(
     onMeaningChange: (String) -> Unit,
     onBehaviorClassChange: (AreaBehaviorClass) -> Unit,
     onSourceKindChange: (DataSourceKind?) -> Unit,
+    onSkillToggle: (AreaSkillKind) -> Unit,
     onOpenIdentityOptions: () -> Unit,
     onCreate: () -> Unit,
 ) {
@@ -234,7 +243,7 @@ fun StartCreateConfirmScreen(
     val summaryPreview = draft.meaning.trim().ifBlank { template.summary }
 
     DaysPageScaffold(
-        title = "Bereich bestaetigen",
+        title = "Bereich pruefen",
         onBack = onBack,
         modifier = Modifier.testTag("start-confirm-screen"),
     ) {
@@ -300,39 +309,40 @@ fun StartCreateConfirmScreen(
                         },
                     )
                 }
-                selectedSuggestion?.sourceKind?.let { suggestedSource ->
-                    Column(
-                        verticalArrangement = Arrangement.spacedBy(10.dp),
+                Column(
+                    verticalArrangement = Arrangement.spacedBy(10.dp),
+                ) {
+                    Text(
+                        text = "Skills",
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.SemiBold,
+                    )
+                    FlowRow(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
-                        Text(
-                            text = "Quelle vorbereiten",
-                            style = MaterialTheme.typography.titleSmall,
-                            fontWeight = FontWeight.SemiBold,
-                        )
-                        ChoiceChipRow(
-                            items = listOf(
-                                ChoiceChipItem(
-                                    id = suggestedSource.name,
-                                    label = sourceKindLabel(suggestedSource),
+                        AreaSkillKind.entries.forEach { skill ->
+                            val isSelected = skill in draft.selectedSkills
+                            val def = skillDefinition(skill)
+                            ChoiceChipRow(
+                                items = listOf(
+                                    ChoiceChipItem(
+                                        id = skill.persistedValue,
+                                        label = if (def.permissionKey != null && !isSelected) {
+                                            "${def.label} \uD83D\uDD12"
+                                        } else {
+                                            def.label
+                                        },
+                                    ),
                                 ),
-                                ChoiceChipItem(
-                                    id = "none",
-                                    label = "Noch offen",
-                                ),
-                            ),
-                            selectedId = draft.sourceKind?.name ?: "none",
-                            onSelect = { selected ->
-                                onSourceKindChange(
-                                    if (selected == "none") null else DataSourceKind.valueOf(selected),
-                                )
-                            },
-                        )
+                                selectedId = if (isSelected) skill.persistedValue else "",
+                                onSelect = { onSkillToggle(skill) },
+                            )
+                        }
+                    }
+                    if (draft.selectedSkills.isEmpty()) {
                         Text(
-                            text = if (draft.sourceKind == null) {
-                                "Die Quelle bleibt nach dem Anlegen noch offen."
-                            } else {
-                                "${sourceKindLabel(draft.sourceKind)} wird direkt mit dem neuen Bereich verbunden."
-                            },
+                            text = "Noch kein Skill gewaehlt. Der Bereich startet ohne Datenquelle.",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
@@ -353,7 +363,7 @@ fun StartCreateConfirmScreen(
                 .fillMaxWidth()
                 .testTag("start-create-save"),
         ) {
-            Text("Bereich anlegen")
+            Text("Erstellen")
         }
     }
 }
@@ -668,6 +678,7 @@ fun buildStartIntentSuggestions(
     val inferred = inferPrimaryIntent(inputKind, normalized)
     val baseTitle = inferred.title.ifBlank { fallbackTitleFor(inputKind) }
     val summarySource = normalized.ifBlank { inferred.defaultSummary }
+    val keywordSkills = skillsForKeywords(normalized).toSet()
     val primary = StartIntentSuggestion(
         id = "primary-${inputKind.id}",
         title = baseTitle,
@@ -676,6 +687,7 @@ fun buildStartIntentSuggestions(
         iconKey = inferred.primaryIconKey,
         behaviorClass = inferred.primaryBehavior,
         sourceKind = inferred.primarySourceKind,
+        skills = inferred.primarySkills.ifEmpty { keywordSkills },
         modeLabel = inferred.primaryModeLabel,
         hintLabel = inferred.primaryHint,
     )
@@ -687,6 +699,7 @@ fun buildStartIntentSuggestions(
         iconKey = inferred.secondaryIconKey,
         behaviorClass = inferred.secondaryBehavior,
         sourceKind = inferred.secondarySourceKind,
+        skills = inferred.secondarySkills.ifEmpty { keywordSkills },
         modeLabel = inferred.secondaryModeLabel,
         hintLabel = inferred.secondaryHint,
     )
@@ -712,12 +725,14 @@ private data class InferredStartIntent(
     val primaryModeLabel: String,
     val primaryHint: String,
     val primarySourceKind: DataSourceKind? = null,
+    val primarySkills: Set<AreaSkillKind> = emptySet(),
     val secondaryTemplateId: String,
     val secondaryIconKey: String,
     val secondaryBehavior: AreaBehaviorClass,
     val secondaryModeLabel: String,
     val secondaryHint: String,
     val secondarySourceKind: DataSourceKind? = null,
+    val secondarySkills: Set<AreaSkillKind> = emptySet(),
 ) {
     fun primarySummary(source: String): String {
         return when (primaryBehavior) {
@@ -758,12 +773,14 @@ private fun inferPrimaryIntent(
             primaryModeLabel = "Termine lesen",
             primaryHint = "Passt, wenn der Bereich lokale Kalendertermine direkt mitnehmen soll.",
             primarySourceKind = DataSourceKind.CALENDAR,
+            primarySkills = setOf(AreaSkillKind.CALENDAR_WATCH),
             secondaryTemplateId = "place",
             secondaryIconKey = "home",
             secondaryBehavior = AreaBehaviorClass.MAINTENANCE,
             secondaryModeLabel = "Termine einbetten",
             secondaryHint = "Passt, wenn der Bereich Kalender eher in eine wiederkehrende Tagesroutine einbetten soll.",
             secondarySourceKind = DataSourceKind.CALENDAR,
+            secondarySkills = setOf(AreaSkillKind.CALENDAR_WATCH),
         )
         "podcast" in lower || "folge" in lower || "feed" in lower -> InferredStartIntent(
             title = domainTitle.ifBlank { "Podcast Radar" },
@@ -773,11 +790,13 @@ private fun inferPrimaryIntent(
             primaryBehavior = AreaBehaviorClass.REFLECTION,
             primaryModeLabel = "Folgen lesen",
             primaryHint = "Passt, wenn der Bereich neue Folgen oder Inhalte erst sammeln und nur das Wesentliche zeigen soll.",
+            primarySkills = setOf(AreaSkillKind.PODCAST_FOLLOW),
             secondaryTemplateId = "project",
             secondaryIconKey = "trend",
             secondaryBehavior = AreaBehaviorClass.PROGRESS,
             secondaryModeLabel = "Folgen handeln",
             secondaryHint = "Passt, wenn aus neuen Folgen spaeter konkrete Hoer- oder Lernzuege entstehen sollen.",
+            secondarySkills = setOf(AreaSkillKind.PODCAST_FOLLOW),
         )
         "screenshot" in lower || "screen" in lower || "bild" in lower || inputKind == StartCreateInputKind.Screenshot -> InferredStartIntent(
             title = domainTitle.ifBlank { "Screenshot Radar" },
@@ -787,11 +806,13 @@ private fun inferPrimaryIntent(
             primaryBehavior = AreaBehaviorClass.TRACKING,
             primaryModeLabel = "Screens lesen",
             primaryHint = "Passt, wenn Screenshots lokal gelesen und auf relevante Inhalte reduziert werden sollen.",
+            primarySkills = setOf(AreaSkillKind.SCREENSHOT_READER),
             secondaryTemplateId = "theme",
             secondaryIconKey = "focus",
             secondaryBehavior = AreaBehaviorClass.REFLECTION,
             secondaryModeLabel = "Muster finden",
             secondaryHint = "Passt, wenn Screenshots eher gesammelt, geordnet und spaeter gedeutet werden sollen.",
+            secondarySkills = setOf(AreaSkillKind.SCREENSHOT_READER),
         )
         "nachricht" in lower || "notification" in lower || "benachr" in lower || "kontakt" in lower || inputKind == StartCreateInputKind.Contact -> InferredStartIntent(
             title = domainTitle.ifBlank { "Kontakt Blick" },
@@ -802,12 +823,14 @@ private fun inferPrimaryIntent(
             primaryModeLabel = "Wichtiges sehen",
             primaryHint = "Passt, wenn nur die wirklich relevanten Kontakte oder Nachrichten auffallen sollen.",
             primarySourceKind = DataSourceKind.NOTIFICATIONS,
+            primarySkills = setOf(AreaSkillKind.NOTIFICATION_FILTER, AreaSkillKind.CONTACT_WATCH),
             secondaryTemplateId = "person",
             secondaryIconKey = "care",
             secondaryBehavior = AreaBehaviorClass.RELATIONSHIP,
             secondaryModeLabel = "Kontakt pflegen",
             secondaryHint = "Passt, wenn aus Signalen eher Beziehungspflege und Follow-ups entstehen sollen.",
             secondarySourceKind = DataSourceKind.NOTIFICATIONS,
+            secondarySkills = setOf(AreaSkillKind.NOTIFICATION_FILTER, AreaSkillKind.CONTACT_WATCH),
         )
         "zuhause" in lower || "home" in lower || "ort" in lower || inputKind == StartCreateInputKind.Location -> InferredStartIntent(
             title = domainTitle.ifBlank { "Ort Routine" },
@@ -817,11 +840,13 @@ private fun inferPrimaryIntent(
             primaryBehavior = AreaBehaviorClass.MAINTENANCE,
             primaryModeLabel = "Ort Routine",
             primaryHint = "Passt, wenn ein Bereich an einen Ort gebunden ruhig erinnern oder mitlaufen soll.",
+            primarySkills = setOf(AreaSkillKind.LOCATION_CONTEXT),
             secondaryTemplateId = "place",
             secondaryIconKey = "shield",
             secondaryBehavior = AreaBehaviorClass.PROTECTION,
             secondaryModeLabel = "Ort Schutz",
             secondaryHint = "Passt, wenn am Ort eher Warnungen, Blocker oder wichtige Kontexte sichtbar werden sollen.",
+            secondarySkills = setOf(AreaSkillKind.LOCATION_CONTEXT),
         )
         "gesund" in lower || "sleep" in lower || "schlaf" in lower || "health" in lower -> InferredStartIntent(
             title = domainTitle.ifBlank { "Gesundheit Blick" },
@@ -832,12 +857,14 @@ private fun inferPrimaryIntent(
             primaryModeLabel = "Koerper lesen",
             primaryHint = "Passt, wenn der Bereich Scores, Trends oder koerperliche Signale ruhig anzeigen soll.",
             primarySourceKind = DataSourceKind.HEALTH_CONNECT,
+            primarySkills = setOf(AreaSkillKind.HEALTH_TRACKING),
             secondaryTemplateId = "ritual",
             secondaryIconKey = "lotus",
             secondaryBehavior = AreaBehaviorClass.MAINTENANCE,
             secondaryModeLabel = "Gesund bleiben",
             secondaryHint = "Passt, wenn aus Koerpersignalen spaeter kleine Pflegezuege entstehen sollen.",
             secondarySourceKind = DataSourceKind.HEALTH_CONNECT,
+            secondarySkills = setOf(AreaSkillKind.HEALTH_TRACKING),
         )
         inputKind == StartCreateInputKind.Link -> InferredStartIntent(
             title = domainTitle.ifBlank { "Link Radar" },
@@ -847,11 +874,13 @@ private fun inferPrimaryIntent(
             primaryBehavior = AreaBehaviorClass.REFLECTION,
             primaryModeLabel = "Quelle lesen",
             primaryHint = "Passt, wenn eine Quelle zuerst gesammelt, gelesen und verdichtet werden soll.",
+            primarySkills = setOf(AreaSkillKind.WEBSITE_READER),
             secondaryTemplateId = "project",
             secondaryIconKey = "briefcase",
             secondaryBehavior = AreaBehaviorClass.PROGRESS,
             secondaryModeLabel = "Quelle nutzen",
             secondaryHint = "Passt, wenn aus einer Quelle spaeter klare Schritte oder Routinen entstehen sollen.",
+            secondarySkills = setOf(AreaSkillKind.WEBSITE_READER),
         )
         else -> InferredStartIntent(
             title = domainTitle.ifBlank { fallbackTitleFor(inputKind) },

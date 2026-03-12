@@ -131,45 +131,20 @@ fun startAreaTileActionLabel(
 }
 
 fun startAreaTileStatusLine(
-    family: StartAreaFamily,
     hint: StartAreaHintState,
     todayLabel: String,
     summary: String,
 ): String {
     val normalizedToday = todayLabel.substringAfter(": ").trim()
-    val primary = when {
+    return when {
         normalizedToday.isNotBlank() && !normalizedToday.equals(hint.compactLabel, ignoreCase = true) -> normalizedToday
-        else -> hint.compactLabel
-    }
-    if (
-        hint.id.startsWith("calendar-") ||
-        hint.id.startsWith("notifications-") ||
-        hint.id.startsWith("health-")
-    ) {
-        return primary
-    }
-    return when (family) {
-        StartAreaFamily.Radar -> primary
-        StartAreaFamily.Pflicht -> primary
-        StartAreaFamily.Routine -> summary.ifBlank { primary }
-        StartAreaFamily.Kontakt -> summary.ifBlank { primary }
-        StartAreaFamily.Gesundheit -> summary.ifBlank { primary }
-        StartAreaFamily.Ort -> summary.ifBlank { primary }
-        StartAreaFamily.Sammlung -> summary.ifBlank { primary }
+        hint.compactLabel.isNotBlank() -> hint.compactLabel
+        summary.isNotBlank() -> summary
+        else -> "Noch kein Signal"
     }
 }
 
-fun startAreaDetailSectionTitle(family: StartAreaFamily): String {
-    return when (family) {
-        StartAreaFamily.Radar -> "Heute im Blick"
-        StartAreaFamily.Pflicht -> "Heute im Stand"
-        StartAreaFamily.Routine -> "Heute in der Routine"
-        StartAreaFamily.Kontakt -> "Heute im Kontakt"
-        StartAreaFamily.Gesundheit -> "Heute in deiner Lage"
-        StartAreaFamily.Ort -> "Heute am Ort"
-        StartAreaFamily.Sammlung -> "Heute im Eingang"
-    }
-}
+fun startAreaDetailSectionTitle(): String = "Heutige Lage"
 
 fun startAreaManualNoteLabel(family: StartAreaFamily): String {
     return when (family) {

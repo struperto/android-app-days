@@ -7,6 +7,7 @@ import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import com.struperto.androidappdays.AppContainer
 import com.struperto.androidappdays.data.repository.AreaKernelRepository
+import com.struperto.androidappdays.data.repository.AreaSkillBindingRepository
 import com.struperto.androidappdays.data.repository.AreaSourceBindingRepository
 import com.struperto.androidappdays.data.repository.CalendarSignalRepository
 import com.struperto.androidappdays.data.repository.CreateAreaInstanceDraft
@@ -15,6 +16,8 @@ import com.struperto.androidappdays.data.repository.NotificationSignalRepository
 import com.struperto.androidappdays.data.repository.PlanRepository
 import com.struperto.androidappdays.data.repository.SourceCapabilityRepository
 import com.struperto.androidappdays.domain.DataSourceKind
+import com.struperto.androidappdays.domain.area.AreaSkillKind
+import com.struperto.androidappdays.domain.area.TileDisplayMode
 import java.time.Clock
 import java.time.Instant
 import java.time.LocalDate
@@ -26,6 +29,7 @@ import kotlinx.coroutines.launch
 class StartViewModel(
     private val areaKernelRepository: AreaKernelRepository,
     private val areaSourceBindingRepository: AreaSourceBindingRepository,
+    private val areaSkillBindingRepository: AreaSkillBindingRepository,
     private val planRepository: PlanRepository,
     private val sourceCapabilityRepository: SourceCapabilityRepository,
     private val calendarSignalRepository: CalendarSignalRepository,
@@ -98,16 +102,26 @@ class StartViewModel(
         iconKey: String,
         behaviorClass: com.struperto.androidappdays.domain.area.AreaBehaviorClass,
         sourceKind: DataSourceKind?,
+        skills: Set<AreaSkillKind> = emptySet(),
+        tileDisplayMode: TileDisplayMode = TileDisplayMode.AMPEL,
+        familyKey: String = "",
         onCreated: (String) -> Unit,
     ) {
+        val trimmedTitle = title.trim()
+        if (trimmedTitle.isBlank()) return
+        val trimmedMeaning = meaning.trim()
+
         viewModelScope.launch {
             val areaId = areaKernelRepository.createActiveInstance(
                 CreateAreaInstanceDraft(
-                    title = title,
-                    summary = meaning,
+                    title = trimmedTitle,
+                    summary = trimmedMeaning,
                     templateId = templateId,
                     iconKey = iconKey,
                     behaviorClass = behaviorClass,
+                    skills = skills,
+                    tileDisplayMode = tileDisplayMode,
+                    familyKey = familyKey,
                 ),
             )
             sourceKind?.let { source ->
@@ -116,14 +130,25 @@ class StartViewModel(
                     source = source,
                 )
             }
+            for (skill in skills) {
+                areaSkillBindingRepository.bind(
+                    areaId = areaId.areaId,
+                    skillKind = skill,
+                )
+            }
             onCreated(areaId.areaId)
         }
     }
 
     fun deleteArea(areaId: String) {
         viewModelScope.launch {
-            areaSourceBindingRepository.clearArea(areaId)
-            areaKernelRepository.deleteActiveInstance(areaId)
+            try {
+                areaSkillBindingRepository.clearArea(areaId)
+                areaSourceBindingRepository.clearArea(areaId)
+                areaKernelRepository.deleteActiveInstance(areaId)
+            } catch (_: Exception) {
+                // silent — UI stays consistent via observed flow
+            }
         }
     }
 
@@ -134,11 +159,13 @@ class StartViewModel(
         templateId: String,
         iconKey: String,
     ) {
+        val trimmedTitle = title.trim()
+        if (trimmedTitle.isBlank()) return
         val current = activeInstances.value.firstOrNull { it.areaId == areaId } ?: return
         viewModelScope.launch {
             areaKernelRepository.updateActiveInstance(
                 current.copy(
-                    title = title.trim(),
+                    title = trimmedTitle,
                     summary = meaning.trim(),
                     templateId = templateId,
                     iconKey = iconKey,
@@ -152,22 +179,34 @@ class StartViewModel(
         secondAreaId: String,
     ) {
         viewModelScope.launch {
-            areaKernelRepository.swapActiveInstanceOrder(
-                firstAreaId = firstAreaId,
-                secondAreaId = secondAreaId,
-            )
+            try {
+                areaKernelRepository.swapActiveInstanceOrder(
+                    firstAreaId = firstAreaId,
+                    secondAreaId = secondAreaId,
+                )
+            } catch (_: Exception) {
+                // silent — UI stays consistent via observed flow
+            }
         }
     }
 
     fun moveAreaEarlier(areaId: String) {
         viewModelScope.launch {
-            areaKernelRepository.moveActiveInstanceEarlier(areaId)
+            try {
+                areaKernelRepository.moveActiveInstanceEarlier(areaId)
+            } catch (_: Exception) {
+                // silent — UI stays consistent via observed flow
+            }
         }
     }
 
     fun moveAreaLater(areaId: String) {
         viewModelScope.launch {
-            areaKernelRepository.moveActiveInstanceLater(areaId)
+            try {
+                areaKernelRepository.moveActiveInstanceLater(areaId)
+            } catch (_: Exception) {
+                // silent — UI stays consistent via observed flow
+            }
         }
     }
 
@@ -177,6 +216,7 @@ class StartViewModel(
                 StartViewModel(
                     areaKernelRepository = appContainer.areaKernelRepository,
                     areaSourceBindingRepository = appContainer.areaSourceBindingRepository,
+                    areaSkillBindingRepository = appContainer.areaSkillBindingRepository,
                     planRepository = appContainer.planRepository,
                     sourceCapabilityRepository = appContainer.sourceCapabilityRepository,
                     calendarSignalRepository = appContainer.calendarSignalRepository,

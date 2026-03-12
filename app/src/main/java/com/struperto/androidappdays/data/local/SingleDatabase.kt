@@ -25,8 +25,10 @@ import androidx.room.RoomDatabase
         SourcePreferenceEntity::class,
         AreaSourceBindingEntity::class,
         HourSlotEntryEntity::class,
+        AreaSkillBindingEntity::class,
+        ChecklistItemEntity::class,
     ],
-    version = 14,
+    version = 15,
     exportSchema = true,
 )
 abstract class SingleDatabase : RoomDatabase() {
@@ -45,6 +47,8 @@ abstract class SingleDatabase : RoomDatabase() {
     abstract fun sourcePreferenceDao(): SourcePreferenceDao
     abstract fun areaSourceBindingDao(): AreaSourceBindingDao
     abstract fun hourSlotEntryDao(): HourSlotEntryDao
+    abstract fun areaSkillBindingDao(): AreaSkillBindingDao
+    abstract fun checklistItemDao(): ChecklistItemDao
 }
 
 @Entity(tableName = "capture_items")

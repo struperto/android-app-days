@@ -508,6 +508,102 @@ val MIGRATION_13_14 = object : Migration(13, 14) {
     }
 }
 
+val MIGRATION_14_15 = object : Migration(14, 15) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL(
+            """
+            CREATE TABLE IF NOT EXISTS `area_skill_bindings` (
+                `areaId` TEXT NOT NULL,
+                `skillKind` TEXT NOT NULL,
+                `configJson` TEXT NOT NULL,
+                `isActive` INTEGER NOT NULL,
+                `createdAt` INTEGER NOT NULL,
+                `updatedAt` INTEGER NOT NULL,
+                PRIMARY KEY(`areaId`, `skillKind`)
+            )
+            """.trimIndent(),
+        )
+        db.execSQL(
+            """
+            CREATE INDEX IF NOT EXISTS `index_area_skill_bindings_areaId`
+            ON `area_skill_bindings` (`areaId`)
+            """.trimIndent(),
+        )
+        db.execSQL(
+            """
+            CREATE INDEX IF NOT EXISTS `index_area_skill_bindings_skillKind`
+            ON `area_skill_bindings` (`skillKind`)
+            """.trimIndent(),
+        )
+        db.execSQL(
+            """
+            CREATE TABLE IF NOT EXISTS `checklist_items` (
+                `id` TEXT NOT NULL,
+                `areaId` TEXT NOT NULL,
+                `title` TEXT NOT NULL,
+                `isCompleted` INTEGER NOT NULL,
+                `dueDate` TEXT,
+                `cadenceKey` TEXT,
+                `sortOrder` INTEGER NOT NULL,
+                `createdAt` INTEGER NOT NULL,
+                `updatedAt` INTEGER NOT NULL,
+                PRIMARY KEY(`id`)
+            )
+            """.trimIndent(),
+        )
+        db.execSQL(
+            """
+            CREATE INDEX IF NOT EXISTS `index_checklist_items_areaId_sortOrder`
+            ON `checklist_items` (`areaId`, `sortOrder`)
+            """.trimIndent(),
+        )
+        db.execSQL(
+            """
+            ALTER TABLE `area_instances`
+            ADD COLUMN `tileDisplayMode` TEXT NOT NULL DEFAULT 'ampel'
+            """.trimIndent(),
+        )
+        db.execSQL(
+            """
+            ALTER TABLE `area_instances`
+            ADD COLUMN `familyKey` TEXT NOT NULL DEFAULT ''
+            """.trimIndent(),
+        )
+        db.execSQL(
+            """
+            INSERT OR IGNORE INTO `area_skill_bindings` (`areaId`, `skillKind`, `configJson`, `isActive`, `createdAt`, `updatedAt`)
+            SELECT `areaId`,
+                CASE `source`
+                    WHEN 'HEALTH_CONNECT' THEN 'health_tracking'
+                    WHEN 'CALENDAR' THEN 'calendar_watch'
+                    WHEN 'NOTIFICATIONS' THEN 'notification_filter'
+                    WHEN 'MANUAL' THEN 'manual_log'
+                    ELSE 'manual_log'
+                END,
+                '',
+                1,
+                `createdAt`,
+                `updatedAt`
+            FROM `area_source_bindings`
+            """.trimIndent(),
+        )
+        db.execSQL(
+            """
+            UPDATE `area_instances`
+            SET `tileDisplayMode` = CASE `behaviorClass`
+                WHEN 'tracking' THEN 'trend'
+                WHEN 'progress' THEN 'score'
+                WHEN 'relationship' THEN 'latest_name'
+                WHEN 'maintenance' THEN 'ampel'
+                WHEN 'protection' THEN 'ampel'
+                WHEN 'reflection' THEN 'short_text'
+                ELSE 'ampel'
+            END
+            """.trimIndent(),
+        )
+    }
+}
+
 private fun updateAreaReferenceColumn(
     db: SupportSQLiteDatabase,
     table: String,

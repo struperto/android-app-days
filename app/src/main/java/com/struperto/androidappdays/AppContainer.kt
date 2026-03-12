@@ -10,8 +10,27 @@ import com.struperto.androidappdays.data.local.MIGRATION_10_11
 import com.struperto.androidappdays.data.local.MIGRATION_11_12
 import com.struperto.androidappdays.data.local.MIGRATION_12_13
 import com.struperto.androidappdays.data.local.MIGRATION_13_14
+import com.struperto.androidappdays.data.local.MIGRATION_14_15
 import com.struperto.androidappdays.data.local.SingleDatabase
+import com.struperto.androidappdays.data.repository.AppUsageRepository
+import com.struperto.androidappdays.data.repository.AreaSkillBindingRepository
 import com.struperto.androidappdays.data.repository.AreaSourceBindingRepository
+import com.struperto.androidappdays.data.repository.ChecklistRepository
+import com.struperto.androidappdays.data.repository.ContactWatchRepository
+import com.struperto.androidappdays.data.repository.DeviceAppUsageRepository
+import com.struperto.androidappdays.data.repository.DeviceContactWatchRepository
+import com.struperto.androidappdays.data.repository.DeviceLocationContextRepository
+import com.struperto.androidappdays.data.repository.DevicePhotoStreamRepository
+import com.struperto.androidappdays.data.repository.DeviceScreenshotRepository
+import com.struperto.androidappdays.data.repository.HttpWebsiteReaderRepository
+import com.struperto.androidappdays.data.repository.LocationContextRepository
+import com.struperto.androidappdays.data.repository.PhotoStreamRepository
+import com.struperto.androidappdays.data.repository.PodcastFollowRepository
+import com.struperto.androidappdays.data.repository.RoomAreaSkillBindingRepository
+import com.struperto.androidappdays.data.repository.RoomChecklistRepository
+import com.struperto.androidappdays.data.repository.RssPodcastFollowRepository
+import com.struperto.androidappdays.data.repository.ScreenshotRepository
+import com.struperto.androidappdays.data.repository.WebsiteReaderRepository
 import com.struperto.androidappdays.data.repository.CalendarSignalRepository
 import com.struperto.androidappdays.data.repository.CaptureRepository
 import com.struperto.androidappdays.data.repository.DeviceCalendarSignalRepository
@@ -45,6 +64,7 @@ import com.struperto.androidappdays.data.repository.SourceCapabilityRepository
 import com.struperto.androidappdays.data.repository.UserFingerprintRepository
 import com.struperto.androidappdays.data.repository.VorhabenRepository
 import com.struperto.androidappdays.data.repository.AndroidHealthConnectRepository
+import com.struperto.androidappdays.domain.area.SkillPermissionManager
 import com.struperto.androidappdays.domain.service.EvaluationEngineV0
 import com.struperto.androidappdays.domain.service.HomeDomainHintProjector
 import com.struperto.androidappdays.domain.service.HypothesisEngineV0
@@ -75,6 +95,7 @@ class AppContainer(context: Context) {
             MIGRATION_11_12,
             MIGRATION_12_13,
             MIGRATION_13_14,
+            MIGRATION_14_15,
         ).build()
     }
 
@@ -206,6 +227,53 @@ class AppContainer(context: Context) {
             dao = database.areaSourceBindingDao(),
             clock = clock,
         )
+    }
+
+    val areaSkillBindingRepository: AreaSkillBindingRepository by lazy {
+        RoomAreaSkillBindingRepository(
+            dao = database.areaSkillBindingDao(),
+            sourceBindingRepository = areaSourceBindingRepository,
+            clock = clock,
+        )
+    }
+
+    val screenshotRepository: ScreenshotRepository by lazy {
+        DeviceScreenshotRepository(context = context.applicationContext)
+    }
+
+    val photoStreamRepository: PhotoStreamRepository by lazy {
+        DevicePhotoStreamRepository(context = context.applicationContext)
+    }
+
+    val contactWatchRepository: ContactWatchRepository by lazy {
+        DeviceContactWatchRepository(context = context.applicationContext)
+    }
+
+    val appUsageRepository: AppUsageRepository by lazy {
+        DeviceAppUsageRepository(context = context.applicationContext)
+    }
+
+    val websiteReaderRepository: WebsiteReaderRepository by lazy {
+        HttpWebsiteReaderRepository()
+    }
+
+    val podcastFollowRepository: PodcastFollowRepository by lazy {
+        RssPodcastFollowRepository()
+    }
+
+    val locationContextRepository: LocationContextRepository by lazy {
+        DeviceLocationContextRepository(context = context.applicationContext)
+    }
+
+    val checklistRepository: ChecklistRepository by lazy {
+        RoomChecklistRepository(
+            dao = database.checklistItemDao(),
+            clock = clock,
+        )
+    }
+
+    val skillPermissionManager: SkillPermissionManager by lazy {
+        SkillPermissionManager(context = context.applicationContext)
     }
 
     val appBootstrapCoordinator: AppBootstrapCoordinator by lazy {

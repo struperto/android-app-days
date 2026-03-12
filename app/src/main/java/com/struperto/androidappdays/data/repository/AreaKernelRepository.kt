@@ -5,6 +5,8 @@ import com.struperto.androidappdays.data.local.AreaKernelDao
 import com.struperto.androidappdays.domain.area.AreaBehaviorClass
 import com.struperto.androidappdays.domain.area.AreaDefaultConfig
 import com.struperto.androidappdays.domain.area.AreaInstance
+import com.struperto.androidappdays.domain.area.AreaSkillKind
+import com.struperto.androidappdays.domain.area.TileDisplayMode
 import com.struperto.androidappdays.domain.area.AreaSnapshot
 import com.struperto.androidappdays.domain.area.mapping.toAreaInstance
 import com.struperto.androidappdays.domain.area.mapping.toAreaInstanceWithFallbackDefaults
@@ -111,6 +113,9 @@ data class CreateAreaInstanceDraft(
     val templateId: String,
     val iconKey: String,
     val behaviorClass: AreaBehaviorClass,
+    val skills: Set<AreaSkillKind> = emptySet(),
+    val tileDisplayMode: TileDisplayMode = TileDisplayMode.AMPEL,
+    val familyKey: String = "",
 )
 
 class RoomBackedAreaKernelRepository(
@@ -196,6 +201,8 @@ class RoomBackedAreaKernelRepository(
                 authoringConfig = created.authoringConfig.copy(
                     behaviorClass = draft.behaviorClass,
                 ),
+                tileDisplayMode = draft.tileDisplayMode,
+                familyKey = draft.familyKey,
             )
             updateActiveInstance(updated)
             return requireNotNull(areaKernelDao.getAreaInstance(areaId)).toAreaInstance()
@@ -212,6 +219,8 @@ class RoomBackedAreaKernelRepository(
             authoringConfig = created.authoringConfig.copy(
                 behaviorClass = draft.behaviorClass,
             ),
+            tileDisplayMode = draft.tileDisplayMode,
+            familyKey = draft.familyKey,
         )
         updateActiveInstance(updated)
         return updated
@@ -280,6 +289,8 @@ class RoomBackedAreaKernelRepository(
                     behaviorClass = instance.authoringConfig.behaviorClass.persistedValue,
                     authoringComplexity = instance.authoringConfig.complexityLevel.name,
                     authoringVisibility = instance.authoringConfig.visibilityLevel.persistedValue,
+                    tileDisplayMode = instance.tileDisplayMode.persistedValue,
+                    familyKey = instance.familyKey,
                     confirmedStepKind = instance.confirmedNextStep?.kind?.name,
                     confirmedStepLabel = instance.confirmedNextStep?.label,
                     confirmedStepDueHint = instance.confirmedNextStep?.dueHint,

@@ -1,5 +1,6 @@
 package com.struperto.androidappdays.domain.area
 
+import com.struperto.androidappdays.domain.area.TileDisplayMode
 import java.time.Instant
 
 /**
@@ -32,6 +33,8 @@ data class AreaInstance(
         definition = startAreaKernelDefinition(definitionId),
         templateId = templateId,
     ),
+    val tileDisplayMode: TileDisplayMode = TileDisplayMode.AMPEL,
+    val familyKey: String = "",
     val confirmedNextStep: AreaNextMeaningfulStep? = null,
     val lastReviewedAt: Instant? = null,
     val createdAt: Instant? = null,
@@ -58,6 +61,8 @@ data class AreaInstance(
             areaId = areaId,
             templateId = templateId,
         ),
+        tileDisplayMode: TileDisplayMode = TileDisplayMode.AMPEL,
+        familyKey: String = "",
         confirmedNextStep: AreaNextMeaningfulStep? = null,
         lastReviewedAt: Instant? = null,
         createdAt: Instant? = null,
@@ -88,6 +93,8 @@ data class AreaInstance(
                 templateId = templateId,
             ),
         ),
+        tileDisplayMode = tileDisplayMode,
+        familyKey = familyKey,
         confirmedNextStep = confirmedNextStep,
         lastReviewedAt = lastReviewedAt,
         createdAt = createdAt,

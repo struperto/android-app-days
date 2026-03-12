@@ -3,6 +3,8 @@ package com.struperto.androidappdays.feature.start
 import com.struperto.androidappdays.data.repository.AreaKernelRepository
 import com.struperto.androidappdays.data.repository.AreaKernelBootstrapState
 import com.struperto.androidappdays.data.repository.AreaKernelPersistenceBoundary
+import com.struperto.androidappdays.data.repository.AreaSkillBinding
+import com.struperto.androidappdays.data.repository.AreaSkillBindingRepository
 import com.struperto.androidappdays.data.repository.AreaSourceBinding
 import com.struperto.androidappdays.data.repository.AreaSourceBindingRepository
 import com.struperto.androidappdays.data.repository.CalendarSignal
@@ -22,6 +24,7 @@ import com.struperto.androidappdays.domain.LifeDomain
 import com.struperto.androidappdays.domain.ObservationMetric
 import com.struperto.androidappdays.domain.ObservationSource
 import com.struperto.androidappdays.domain.area.AreaInstance
+import com.struperto.androidappdays.domain.area.AreaSkillKind
 import com.struperto.androidappdays.domain.area.AreaSnapshot
 import com.struperto.androidappdays.domain.area.defaultAreaAuthoringConfig
 import com.struperto.androidappdays.domain.area.startAreaKernelDefinition
@@ -87,6 +90,7 @@ class AreaStudioViewModelTest {
         val viewModel = AreaStudioViewModel(
             areaKernelRepository = areaKernelRepository,
             areaSourceBindingRepository = FakeAreaStudioSourceBindingRepository(),
+            areaSkillBindingRepository = FakeAreaStudioSkillBindingRepository(),
             planRepository = FakePlanRepository(),
             sourceCapabilityRepository = FakeAreaStudioSourceCapabilityRepository(),
             calendarSignalRepository = FakeAreaStudioCalendarSignalRepository(),
@@ -135,6 +139,7 @@ class AreaStudioViewModelTest {
         val viewModel = AreaStudioViewModel(
             areaKernelRepository = areaKernelRepository,
             areaSourceBindingRepository = FakeAreaStudioSourceBindingRepository(),
+            areaSkillBindingRepository = FakeAreaStudioSkillBindingRepository(),
             planRepository = FakePlanRepository(),
             sourceCapabilityRepository = FakeAreaStudioSourceCapabilityRepository(),
             calendarSignalRepository = FakeAreaStudioCalendarSignalRepository(),
@@ -203,6 +208,7 @@ class AreaStudioViewModelTest {
         val viewModel = AreaStudioViewModel(
             areaKernelRepository = areaKernelRepository,
             areaSourceBindingRepository = FakeAreaStudioSourceBindingRepository(),
+            areaSkillBindingRepository = FakeAreaStudioSkillBindingRepository(),
             planRepository = FakePlanRepository(),
             sourceCapabilityRepository = FakeAreaStudioSourceCapabilityRepository(),
             calendarSignalRepository = FakeAreaStudioCalendarSignalRepository(),
@@ -261,6 +267,7 @@ class AreaStudioViewModelTest {
         val viewModel = AreaStudioViewModel(
             areaKernelRepository = areaKernelRepository,
             areaSourceBindingRepository = FakeAreaStudioSourceBindingRepository(),
+            areaSkillBindingRepository = FakeAreaStudioSkillBindingRepository(),
             planRepository = FakePlanRepository(),
             sourceCapabilityRepository = FakeAreaStudioSourceCapabilityRepository(),
             calendarSignalRepository = FakeAreaStudioCalendarSignalRepository(),
@@ -310,6 +317,7 @@ class AreaStudioViewModelTest {
         val viewModel = AreaStudioViewModel(
             areaKernelRepository = areaKernelRepository,
             areaSourceBindingRepository = FakeAreaStudioSourceBindingRepository(),
+            areaSkillBindingRepository = FakeAreaStudioSkillBindingRepository(),
             planRepository = FakePlanRepository(),
             sourceCapabilityRepository = FakeAreaStudioSourceCapabilityRepository(),
             calendarSignalRepository = FakeAreaStudioCalendarSignalRepository(),
@@ -375,6 +383,7 @@ class AreaStudioViewModelTest {
                     ),
                 ),
             ),
+            areaSkillBindingRepository = FakeAreaStudioSkillBindingRepository(),
             planRepository = FakePlanRepository(),
             sourceCapabilityRepository = FakeAreaStudioSourceCapabilityRepository(
                 enabledSources = setOf(DataSourceKind.CALENDAR),
@@ -408,6 +417,7 @@ class AreaStudioViewModelTest {
         val viewModel = AreaStudioViewModel(
             areaKernelRepository = FakeAreaStudioAreaKernelRepository(),
             areaSourceBindingRepository = bindings,
+            areaSkillBindingRepository = FakeAreaStudioSkillBindingRepository(),
             planRepository = FakePlanRepository(),
             sourceCapabilityRepository = FakeAreaStudioSourceCapabilityRepository(),
             calendarSignalRepository = FakeAreaStudioCalendarSignalRepository(),
@@ -465,6 +475,7 @@ class AreaStudioViewModelTest {
                     ),
                 ),
             ),
+            areaSkillBindingRepository = FakeAreaStudioSkillBindingRepository(),
             planRepository = FakePlanRepository(),
             sourceCapabilityRepository = FakeAreaStudioSourceCapabilityRepository(
                 enabledSources = setOf(DataSourceKind.HEALTH_CONNECT),
@@ -681,8 +692,6 @@ private class FakeAreaStudioNotificationSignalRepository(
         id: String,
         removedAt: Long,
     ) = Unit
-
-    override suspend fun clearAll() = Unit
 }
 
 private class FakeAreaStudioHealthConnectRepository(
@@ -695,4 +704,36 @@ private class FakeAreaStudioHealthConnectRepository(
     override suspend fun grantedPermissions(): Set<String> = emptySet()
 
     override suspend fun readDailyObservations(logicalDate: LocalDate): List<DomainObservation> = observations
+}
+
+private class FakeAreaStudioSkillBindingRepository : AreaSkillBindingRepository {
+    private val bindingsFlow = MutableStateFlow<List<AreaSkillBinding>>(emptyList())
+
+    override fun observeAll(): Flow<List<AreaSkillBinding>> = bindingsFlow
+
+    override fun observeByArea(areaId: String): Flow<List<AreaSkillBinding>> {
+        return flowOf(bindingsFlow.value.filter { it.areaId == areaId })
+    }
+
+    override suspend fun loadAll(): List<AreaSkillBinding> = bindingsFlow.value
+
+    override suspend fun bind(areaId: String, skillKind: AreaSkillKind, configJson: String) {
+        val binding = AreaSkillBinding(areaId = areaId, skillKind = skillKind, configJson = configJson, isActive = true)
+        bindingsFlow.value = bindingsFlow.value
+            .filterNot { it.areaId == areaId && it.skillKind == skillKind } + binding
+    }
+
+    override suspend fun unbind(areaId: String, skillKind: AreaSkillKind) {
+        bindingsFlow.value = bindingsFlow.value.filterNot { it.areaId == areaId && it.skillKind == skillKind }
+    }
+
+    override suspend fun updateConfig(areaId: String, skillKind: AreaSkillKind, configJson: String) {
+        bindingsFlow.value = bindingsFlow.value.map {
+            if (it.areaId == areaId && it.skillKind == skillKind) it.copy(configJson = configJson) else it
+        }
+    }
+
+    override suspend fun clearArea(areaId: String) {
+        bindingsFlow.value = bindingsFlow.value.filterNot { it.areaId == areaId }
+    }
 }

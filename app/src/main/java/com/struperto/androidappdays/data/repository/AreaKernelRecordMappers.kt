@@ -9,6 +9,7 @@ import com.struperto.androidappdays.domain.area.AreaDirectionMode
 import com.struperto.androidappdays.domain.area.AreaFlowProfile
 import com.struperto.androidappdays.domain.area.AreaInstance
 import com.struperto.androidappdays.domain.area.AreaLageMode
+import com.struperto.androidappdays.domain.area.TileDisplayMode
 import com.struperto.androidappdays.domain.area.AreaNextMeaningfulStep
 import com.struperto.androidappdays.domain.area.AreaProfileConfig
 import com.struperto.androidappdays.domain.area.AreaSnapshot
@@ -87,6 +88,8 @@ internal fun AreaInstanceEntity.toAreaInstance(): AreaInstance {
                 ?.let(AreaVisibilityLevel::fromPersistedValue)
                 ?: authoringDefaults.visibilityLevel,
         ),
+        tileDisplayMode = TileDisplayMode.fromPersistedValue(tileDisplayMode),
+        familyKey = familyKey,
         confirmedNextStep = confirmedStepLabel?.takeIf(String::isNotBlank)?.let { label ->
             AreaNextMeaningfulStep(
                 kind = confirmedStepKind?.takeIf(String::isNotBlank)

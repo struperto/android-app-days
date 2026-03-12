@@ -46,6 +46,8 @@ data class AreaInstanceEntity(
     val confirmedStepUpdatedAt: Long? = null,
     val lastReviewedAt: Long? = null,
     val templateId: String?,
+    val tileDisplayMode: String = "ampel",
+    val familyKey: String = "",
     val createdAt: Long,
     val updatedAt: Long,
 )

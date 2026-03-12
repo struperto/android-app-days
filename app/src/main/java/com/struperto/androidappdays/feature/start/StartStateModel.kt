@@ -21,6 +21,7 @@ import com.struperto.androidappdays.domain.area.AreaFreshnessBand
 import com.struperto.androidappdays.domain.area.AreaSeverity
 import com.struperto.androidappdays.domain.area.AreaTodayOutput
 import com.struperto.androidappdays.domain.area.AreaTodayOutputInput
+import com.struperto.androidappdays.domain.area.TileDisplayMode
 import com.struperto.androidappdays.domain.area.mapping.toAreaBlueprint
 import com.struperto.androidappdays.domain.area.mapping.toAreaDefinition
 import com.struperto.androidappdays.domain.area.mapping.toAreaInstance
@@ -74,6 +75,8 @@ data class StartAreaOverviewTile(
     val canMoveEarlier: Boolean,
     val canMoveLater: Boolean,
     val todayOutput: AreaTodayOutput,
+    val tileDisplayMode: TileDisplayMode = TileDisplayMode.AMPEL,
+    val familyKey: String = "",
 )
 
 data class StartAreaDetailKernelInput(
@@ -431,6 +434,8 @@ fun projectStartOverviewState(
                     canMoveEarlier = index > 0,
                     canMoveLater = index < orderedAreas.lastIndex,
                     todayOutput = todayOutput,
+                    tileDisplayMode = instance.tileDisplayMode,
+                    familyKey = instance.familyKey,
                 )
             },
     )
@@ -661,6 +666,10 @@ private fun resolveStartAreaFamily(
     blueprint: AreaBlueprint?,
     todayOutput: AreaTodayOutput,
 ): StartAreaFamily {
+    if (instance.familyKey.isNotBlank()) {
+        StartAreaFamily.entries.firstOrNull { it.name.equals(instance.familyKey, ignoreCase = true) }
+            ?.let { return it }
+    }
     val summaryText = buildString {
         append(instance.title)
         append(' ')
@@ -738,8 +747,8 @@ private fun buildStartAreaHints(
             AreaSourceTruth.missing -> add(
                 StartAreaHintState(
                     id = "source-missing",
-                    title = "Lokale Quelle fehlt",
-                    detail = "Dieser Bereich hat noch keine verlaessliche lokale Spur. Richte zuerst Eingaben oder eine klare Quelle ein.",
+                    title = "Noch keine Quelle",
+                    detail = "Verbinde eine Quelle (Kalender, Benachrichtigungen oder Health Connect), damit der Bereich automatisch Daten bekommt.",
                     compactLabel = "Quelle fehlt",
                     tone = StartAreaHintTone.Notice,
                 ),
@@ -754,9 +763,9 @@ private fun buildStartAreaHints(
             add(
                 StartAreaHintState(
                     id = "empty-state",
-                    title = "Heute ist noch wenig sichtbar",
-                    detail = "Der Bereich ist angelegt, aber fuer heute liegt noch keine brauchbare Spur oder klare Einordnung vor.",
-                    compactLabel = "Heute noch leer",
+                    title = "Heute noch keine Eingabe",
+                    detail = "Setze eine Lage oder schreibe eine Notiz, damit der Bereich fuer heute sichtbar wird.",
+                    compactLabel = "Heute offen",
                     tone = StartAreaHintTone.Notice,
                 ),
             )
@@ -766,9 +775,9 @@ private fun buildStartAreaHints(
             add(
                 StartAreaHintState(
                     id = "stale-signal",
-                    title = "Signal ist nicht mehr frisch",
-                    detail = "Die letzte brauchbare Spur ist schon aelter. Pruefe, ob dieser Bereich haeufiger gelesen oder aktualisiert werden soll.",
-                    compactLabel = "Spur ist alt",
+                    title = "Letztes Update ist aelter",
+                    detail = "Die letzte Eingabe liegt mehrere Tage zurueck. Aktualisiere die Lage, wenn sich etwas geaendert hat.",
+                    compactLabel = "Nicht aktuell",
                     tone = StartAreaHintTone.Notice,
                 ),
             )
@@ -778,9 +787,9 @@ private fun buildStartAreaHints(
             add(
                 StartAreaHintState(
                     id = "meaning-open",
-                    title = "Zweck noch schaerfen",
-                    detail = "Formuliere den Bereich klarer. Dann werden Vorschlaege, Hinweise und spaetere Widgets deutlich treffsicherer.",
-                    compactLabel = "Zweck schaerfen",
+                    title = "Beschreibung verfeinern",
+                    detail = "Eine genauere Beschreibung hilft Days, bessere Vorschlaege und Hinweise zu geben.",
+                    compactLabel = "Beschreibung offen",
                     tone = StartAreaHintTone.Notice,
                 ),
             )
@@ -790,9 +799,9 @@ private fun buildStartAreaHints(
             add(
                 StartAreaHintState(
                     id = "high-severity",
-                    title = "Braucht heute Aufmerksamkeit",
-                    detail = "Die heutige Lage ist nicht nur sichtbar, sondern merklich angespannt. Halte die Anzeige kompakt, aber den Bereich in Reichweite.",
-                    compactLabel = "Heute zieht",
+                    title = "Braucht Aufmerksamkeit",
+                    detail = "Die heutige Lage zeigt erhoehten Handlungsbedarf.",
+                    compactLabel = "Dringend",
                     tone = StartAreaHintTone.Warning,
                 ),
             )
@@ -803,9 +812,9 @@ private fun buildStartAreaHints(
         return listOf(
             StartAreaHintState(
                 id = "quiet",
-                title = "Laeuft ruhig",
-                detail = "Der Bereich ist aktuell ruhig lesbar. Auf Start reicht ein kurzes Signal ohne weitere Eskalation.",
-                compactLabel = "Laeuft ruhig",
+                title = "Alles im Rahmen",
+                detail = "Keine offenen Punkte. Der Bereich laeuft ruhig.",
+                compactLabel = "Alles gut",
                 tone = StartAreaHintTone.Quiet,
             ),
         )

@@ -20,11 +20,13 @@ import androidx.compose.material.icons.automirrored.outlined.ArrowForwardIos
 import androidx.compose.material.icons.automirrored.outlined.KeyboardArrowRight
 import androidx.compose.material.icons.outlined.AutoAwesome
 import androidx.compose.material.icons.outlined.Check
+import androidx.compose.material.icons.outlined.DeleteOutline
 import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material.icons.outlined.Sync
 import androidx.compose.material.icons.outlined.TrackChanges
 import androidx.compose.material.icons.outlined.Tune
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -38,6 +40,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
@@ -75,6 +78,7 @@ fun AreaStudioScreen(
     areaId: String,
     onBack: () -> Unit,
     onOpenSourceSettings: () -> Unit,
+    onDeleteArea: (String) -> Unit,
     onTargetScoreChange: (String, Float) -> Unit,
     onManualScoreChange: (String, Int?) -> Unit,
     onManualStateChange: (String, String?) -> Unit,
@@ -188,6 +192,15 @@ fun AreaStudioScreen(
                     hints = prominentHints,
                 )
             }
+            AreaHomeHubCard(
+                area = area,
+                onEditIdentity = { activeSurface = AreaStudioSurface.Identity },
+                onOpenPanel = { activePanel = it },
+            )
+            AreaTodayOutputCard(
+                area = area,
+                onManualNoteChange = onManualNoteChange,
+            )
             sourceSetup?.let { setup ->
                 AreaSourceSetupCard(
                     area = area,
@@ -197,25 +210,19 @@ fun AreaStudioScreen(
                     onUnbindSource = { sourceKind -> onUnbindSource(area.areaId, sourceKind) },
                 )
             }
-            AreaHomeHubCard(
-                area = area,
-                onEditIdentity = { activeSurface = AreaStudioSurface.Identity },
-                onOpenPanel = { activePanel = it },
-            )
-            AreaAuthoringEntryCard(
-                authoring = authoring,
-                onOpenAuthoring = { activeSurface = AreaStudioSurface.Authoring },
-            )
-            AreaTodayOutputCard(
-                area = area,
-                onManualNoteChange = onManualNoteChange,
-            )
             if (lowerHints.isNotEmpty()) {
                 AreaHintsCard(
                     area = area,
                     hints = lowerHints,
                 )
             }
+            AreaAuthoringEntryCard(
+                authoring = authoring,
+                onOpenAuthoring = { activeSurface = AreaStudioSurface.Authoring },
+            )
+            AreaDeleteCard(
+                onDelete = { onDeleteArea(area.areaId) },
+            )
         }
     }
 }
@@ -347,7 +354,7 @@ private fun AreaTodayOutputCard(
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             Text(
-                text = startAreaDetailSectionTitle(area.family),
+                text = startAreaDetailSectionTitle(),
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.SemiBold,
             )
@@ -1742,6 +1749,59 @@ private fun applyPanelOption(
         }
 
         StartPanelActionId.SnapshotClear -> Unit
+    }
+}
+
+@Composable
+private fun AreaDeleteCard(
+    onDelete: () -> Unit,
+) {
+    var showConfirm by rememberSaveable { mutableStateOf(false) }
+
+    if (showConfirm) {
+        AlertDialog(
+            onDismissRequest = { showConfirm = false },
+            title = { Text("Bereich loeschen?") },
+            text = { Text("Der Bereich und alle Tageswerte werden unwiderruflich entfernt.") },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        showConfirm = false
+                        onDelete()
+                    },
+                    modifier = Modifier.testTag("area-delete-confirm"),
+                ) {
+                    Text(
+                        text = "Loeschen",
+                        color = AppTheme.colors.danger,
+                    )
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showConfirm = false }) {
+                    Text("Abbrechen")
+                }
+            },
+        )
+    }
+
+    TextButton(
+        onClick = { showConfirm = true },
+        modifier = Modifier
+            .fillMaxWidth()
+            .testTag("area-delete-button"),
+    ) {
+        Icon(
+            imageVector = Icons.Outlined.DeleteOutline,
+            contentDescription = null,
+            tint = AppTheme.colors.danger,
+            modifier = Modifier.size(18.dp),
+        )
+        Text(
+            text = "Bereich loeschen",
+            modifier = Modifier.padding(start = 8.dp),
+            color = AppTheme.colors.danger,
+        )
     }
 }
 
