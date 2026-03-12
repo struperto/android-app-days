@@ -1,42 +1,42 @@
 package com.struperto.androidappdays.navigation
 
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.testTag
+import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
-import androidx.navigation.NavType
 import androidx.navigation.NavHostController
-import androidx.navigation.navArgument
+import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
+import androidx.navigation.navArgument
 import com.struperto.androidappdays.DaysApp
 import com.struperto.androidappdays.feature.multi.MultiScreen
-import com.struperto.androidappdays.feature.start.AreaStudioScreen
-import com.struperto.androidappdays.feature.start.AreaStudioViewModel
-import com.struperto.androidappdays.feature.start.StartScreen
+import com.struperto.androidappdays.feature.multi.MultiViewModel
 import com.struperto.androidappdays.feature.settings.SettingsDomainDetailScreen
 import com.struperto.androidappdays.feature.settings.SettingsDomainsScreen
-import com.struperto.androidappdays.feature.settings.SettingsResearchScreen
 import com.struperto.androidappdays.feature.settings.SettingsScreen
 import com.struperto.androidappdays.feature.settings.SettingsSourcesScreen
 import com.struperto.androidappdays.feature.settings.SettingsViewModel
-import com.struperto.androidappdays.feature.single.capture.CaptureScreen
-import com.struperto.androidappdays.feature.single.capture.CaptureViewModel
-import com.struperto.androidappdays.feature.single.create.CreateScreen
 import com.struperto.androidappdays.feature.single.home.SingleHomeScreen
 import com.struperto.androidappdays.feature.single.home.SingleHomeViewModel
-import com.struperto.androidappdays.feature.single.lifewheel.LifeWheelScreen
-import com.struperto.androidappdays.feature.single.lifewheel.LifeWheelViewModel
-import com.struperto.androidappdays.feature.single.plan.PlanScreen
-import com.struperto.androidappdays.feature.single.plan.PlanViewModel
-import com.struperto.androidappdays.feature.single.schedule.DayScheduleScreen
-import com.struperto.androidappdays.feature.single.workbench.WorkbenchScreen
-import com.struperto.androidappdays.feature.single.workbench.WorkbenchViewModel
-import com.struperto.androidappdays.feature.single.workingset.WorkingSetScreen
-import com.struperto.androidappdays.feature.single.workingset.WorkingSetViewModel
+import com.struperto.androidappdays.feature.start.AreaStudioScreen
+import com.struperto.androidappdays.feature.start.AreaStudioViewModel
+import com.struperto.androidappdays.feature.start.StartScreen
+import com.struperto.androidappdays.feature.start.StartViewModel
 
 @Composable
 fun AppNavHost(
@@ -44,43 +44,91 @@ fun AppNavHost(
     modifier: Modifier = Modifier,
 ) {
     val appContainer = (LocalContext.current.applicationContext as DaysApp).appContainer
+
     fun navigateMode(route: String) {
         navController.navigate(route) {
             launchSingleTop = true
         }
     }
+
     NavHost(
         navController = navController,
-        startDestination = AppDestination.Start.route,
+        startDestination = AppDestination.Boot.route,
         modifier = modifier,
     ) {
         composable(AppDestination.Boot.route) {
+            val bootstrapState by appContainer.appBootstrapCoordinator.state.collectAsStateWithLifecycle()
             LaunchedEffect(Unit) {
-                navController.navigate(AppDestination.Start.route) {
+                appContainer.ensureAppBootstrapped()
+            }
+            LaunchedEffect(bootstrapState.isReady) {
+                if (!bootstrapState.isReady) return@LaunchedEffect
+                navController.navigate(AppDestination.Home.route) {
                     popUpTo(AppDestination.Boot.route) {
                         inclusive = true
                     }
                 }
             }
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .semantics { testTag = "app-boot-screen" },
+                contentAlignment = Alignment.Center,
+            ) {
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(16.dp),
+                ) {
+                    CircularProgressIndicator()
+                    Text(
+                        text = bootstrapState.lastErrorMessage
+                            ?.let { "Startinitialisierung fehlgeschlagen: $it" }
+                            ?: "Days initialisiert Start und Quellen.",
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                }
+            }
         }
+
         composable(AppDestination.Start.route) {
-            val homeViewModel: SingleHomeViewModel = viewModel(
-                factory = SingleHomeViewModel.factory(appContainer),
+            val viewModel: StartViewModel = viewModel(
+                factory = StartViewModel.factory(appContainer),
             )
-            val homeState by homeViewModel.state.collectAsStateWithLifecycle()
+            val state by viewModel.state.collectAsStateWithLifecycle()
             StartScreen(
-                homeState = homeState,
+                state = state,
                 onOpenSettings = { navController.navigate(AppDestination.Settings.route) },
                 onOpenStart = { navigateMode(AppDestination.Start.route) },
                 onOpenHome = { navigateMode(AppDestination.Home.route) },
                 onOpenMulti = { navigateMode(AppDestination.Multi.route) },
-                onOpenArea = { areaId -> navController.navigate(startAreaRoute(areaId)) },
-                onOpenLifeWheel = { navController.navigate(AppDestination.LifeWheel.route) },
-                onOpenSettingsDomains = { navController.navigate(AppDestination.SettingsDomains.route) },
-                onOpenSettingsSources = { navController.navigate(AppDestination.SettingsSources.route) },
-                onOpenSettingsResearch = { navController.navigate(AppDestination.SettingsResearch.route) },
+                onOpenArea = { areaId: String -> navController.navigate(startAreaRoute(areaId)) },
+                onDeleteArea = viewModel::deleteArea,
+                onMoveAreaEarlier = viewModel::moveAreaEarlier,
+                onMoveAreaLater = viewModel::moveAreaLater,
+                onSwapAreas = viewModel::swapAreas,
+                onCreateArea = { draft ->
+                    viewModel.createArea(
+                        title = draft.title,
+                        meaning = draft.meaning,
+                        templateId = draft.templateId,
+                        iconKey = draft.iconKey,
+                        behaviorClass = draft.behaviorClass,
+                    ) { areaId ->
+                        navController.navigate(startAreaRoute(areaId))
+                    }
+                },
+                onUpdateArea = { areaId, draft ->
+                    viewModel.updateAreaIdentity(
+                        areaId = areaId,
+                        title = draft.title,
+                        meaning = draft.meaning,
+                        templateId = draft.templateId,
+                        iconKey = draft.iconKey,
+                    )
+                },
             )
         }
+
         composable(
             route = StartAreaPattern,
             arguments = listOf(
@@ -100,201 +148,56 @@ fun AppNavHost(
                 onBack = navController::popBackStack,
                 onTargetScoreChange = viewModel::setTargetScore,
                 onManualScoreChange = viewModel::setManualScore,
+                onManualStateChange = viewModel::setManualState,
+                onManualNoteChange = viewModel::setManualNote,
+                onClearSnapshot = viewModel::clearSnapshot,
+                onUpdateIdentity = viewModel::setAreaIdentity,
                 onCadenceChange = viewModel::setCadence,
                 onIntensityChange = viewModel::setIntensity,
                 onSignalBlendChange = viewModel::setSignalBlend,
+                onLageModeChange = viewModel::setLageMode,
+                onDirectionModeChange = viewModel::setDirectionMode,
+                onSourcesModeChange = viewModel::setSourcesMode,
+                onFlowProfileChange = viewModel::setFlowProfile,
+                onComplexityLevelChange = viewModel::setComplexityLevel,
+                onVisibilityLevelChange = viewModel::setVisibilityLevel,
                 onToggleTrack = viewModel::toggleTrack,
+                onPromoteTrack = viewModel::promoteTrack,
                 onRemindersChange = viewModel::setRemindersEnabled,
                 onReviewChange = viewModel::setReviewEnabled,
                 onExperimentsChange = viewModel::setExperimentsEnabled,
             )
         }
+
         composable(AppDestination.Home.route) {
-            val homeViewModel: SingleHomeViewModel = viewModel(
+            val viewModel: SingleHomeViewModel = viewModel(
                 factory = SingleHomeViewModel.factory(appContainer),
             )
-            val state by homeViewModel.state.collectAsStateWithLifecycle()
+            val state by viewModel.state.collectAsStateWithLifecycle()
             SingleHomeScreen(
                 state = state,
                 onOpenStart = { navigateMode(AppDestination.Start.route) },
                 onOpenMulti = { navigateMode(AppDestination.Multi.route) },
                 onOpenSettings = { navController.navigate(AppDestination.Settings.route) },
-                onRefreshPassiveSignals = homeViewModel::refreshPassiveSignals,
-                onSetHourSlotStatus = homeViewModel::setHourSlotStatus,
-                onSaveHourSlotNote = homeViewModel::saveHourSlotNote,
+                onRefreshPassiveSignals = viewModel::refreshPassiveSignals,
+                onSetHourSlotStatus = viewModel::setHourSlotStatus,
+                onSaveHourSlotNote = viewModel::saveHourSlotNote,
             )
         }
+
         composable(AppDestination.Multi.route) {
+            val viewModel: MultiViewModel = viewModel(
+                factory = MultiViewModel.factory(appContainer),
+            )
+            val state by viewModel.state.collectAsStateWithLifecycle()
             MultiScreen(
+                state = state,
                 onOpenStart = { navigateMode(AppDestination.Start.route) },
                 onOpenSingle = { navigateMode(AppDestination.Home.route) },
                 onOpenSettings = { navController.navigate(AppDestination.Settings.route) },
             )
         }
-        composable(
-            route = WorkbenchPattern,
-            arguments = listOf(
-                navArgument(WorkbenchPaneArg) {
-                    type = NavType.StringType
-                    nullable = true
-                    defaultValue = null
-                },
-            ),
-        ) {
-            val viewModel: WorkbenchViewModel = viewModel(
-                factory = WorkbenchViewModel.factory(appContainer),
-            )
-            val state by viewModel.state.collectAsStateWithLifecycle()
-            WorkbenchScreen(
-                state = state,
-                onPaneSelected = viewModel::setPane,
-                onDraftChange = viewModel::onDraftChange,
-                onAreaSelected = viewModel::onAreaSelected,
-                onTimeBlockSelected = viewModel::onTimeBlockSelected,
-                onSubmit = viewModel::submit,
-                onImportClipboard = viewModel::importClipboard,
-                onVoiceTranscript = viewModel::ingestVoiceTranscript,
-                onShowShareHint = viewModel::showShareHint,
-                onAssistDraft = viewModel::generateAssistFromDraft,
-                onAssistLatest = viewModel::generateAssistFromLatestCapture,
-                onSignalSelected = viewModel::jumpToSignal,
-                onClearFeedback = viewModel::clearFeedback,
-                onCaptureToToday = viewModel::sendCaptureToToday,
-                onCaptureToLater = viewModel::sendCaptureToLater,
-                onCaptureDone = viewModel::completeCapture,
-                onVorhabenToToday = viewModel::sendVorhabenToToday,
-                onVorhabenDone = viewModel::completeVorhaben,
-                onTogglePlanDone = viewModel::togglePlanDone,
-                onRemovePlan = viewModel::removePlan,
-                onBack = navController::popBackStack,
-            )
-        }
-        composable(AppDestination.LifeWheel.route) {
-            val viewModel: LifeWheelViewModel = viewModel(
-                factory = LifeWheelViewModel.factory(appContainer),
-            )
-            val state by viewModel.state.collectAsStateWithLifecycle()
-            LaunchedEffect(state.didCompleteSetup) {
-                if (state.didCompleteSetup) {
-                    navController.navigate(AppDestination.Home.route) {
-                        popUpTo(AppDestination.LifeWheel.route) {
-                            inclusive = true
-                        }
-                    }
-                    viewModel.acknowledgeCompletion()
-                }
-            }
-            LifeWheelScreen(
-                state = state,
-                onRolesChange = viewModel::onRolesChange,
-                onResponsibilitiesChange = viewModel::onResponsibilitiesChange,
-                onPriorityRulesChange = viewModel::onPriorityRulesChange,
-                onWeeklyRhythmChange = viewModel::onWeeklyRhythmChange,
-                onRecurringCommitmentsChange = viewModel::onRecurringCommitmentsChange,
-                onGoodDayPatternChange = viewModel::onGoodDayPatternChange,
-                onBadDayPatternChange = viewModel::onBadDayPatternChange,
-                onDayStartHourChange = viewModel::onDayStartHourChange,
-                onDayEndHourChange = viewModel::onDayEndHourChange,
-                onMorningEnergyChange = viewModel::onMorningEnergyChange,
-                onAfternoonEnergyChange = viewModel::onAfternoonEnergyChange,
-                onEveningEnergyChange = viewModel::onEveningEnergyChange,
-                onFocusStrengthChange = viewModel::onFocusStrengthChange,
-                onDisruptionSensitivityChange = viewModel::onDisruptionSensitivityChange,
-                onRecoveryNeedChange = viewModel::onRecoveryNeedChange,
-                onSaveFingerprint = viewModel::saveFingerprint,
-                onCommitDiscovery = viewModel::commitDiscovery,
-                onAreaLabelChange = viewModel::onAreaLabelChange,
-                onAreaDefinitionChange = viewModel::onAreaDefinitionChange,
-                onAreaTargetScoreChange = viewModel::onAreaTargetScoreChange,
-                onSaveArea = viewModel::saveArea,
-                onManualScoreChange = viewModel::setManualScore,
-                onBack = navController::popBackStack,
-            )
-        }
-        composable(
-            route = WorkingSetPattern,
-            arguments = listOf(
-                navArgument(WorkingSetCaptureIdArg) {
-                    type = NavType.StringType
-                    nullable = true
-                    defaultValue = null
-                },
-            ),
-        ) {
-            val viewModel: WorkingSetViewModel = viewModel(
-                factory = WorkingSetViewModel.factory(appContainer),
-            )
-            val state by viewModel.state.collectAsStateWithLifecycle()
-            WorkingSetScreen(
-                state = state,
-                onTitleChange = viewModel::onTitleChange,
-                onNoteChange = viewModel::onNoteChange,
-                onAreaSelected = viewModel::onAreaSelected,
-                onSave = viewModel::save,
-                onOpenPlan = { vorhabenId ->
-                    navController.navigate(planRoute(vorhabenId = vorhabenId))
-                },
-                onArchive = viewModel::archive,
-                onBack = navController::popBackStack,
-            )
-        }
-        composable(AppDestination.DaySchedule.route) {
-            DayScheduleScreen(onBack = navController::popBackStack)
-        }
-        composable(
-            route = PlanPattern,
-            arguments = listOf(
-                navArgument(PlanCaptureIdArg) {
-                    type = NavType.StringType
-                    nullable = true
-                    defaultValue = null
-                },
-                navArgument(PlanVorhabenIdArg) {
-                    type = NavType.StringType
-                    nullable = true
-                    defaultValue = null
-                },
-            ),
-        ) {
-            val viewModel: PlanViewModel = viewModel(
-                factory = PlanViewModel.factory(appContainer),
-            )
-            val state by viewModel.state.collectAsStateWithLifecycle()
-            PlanScreen(
-                state = state,
-                onTitleChange = viewModel::onTitleChange,
-                onNoteChange = viewModel::onNoteChange,
-                onAreaSelected = viewModel::onAreaSelected,
-                onTimeBlockSelected = viewModel::onTimeBlockSelected,
-                onSave = viewModel::save,
-                onToggleDone = viewModel::toggleDone,
-                onRemove = viewModel::remove,
-                onBack = navController::popBackStack,
-            )
-        }
-        composable(AppDestination.Capture.route) {
-            val viewModel: CaptureViewModel = viewModel(
-                factory = CaptureViewModel.factory(appContainer),
-            )
-            val state by viewModel.state.collectAsStateWithLifecycle()
-            CaptureScreen(
-                state = state,
-                onDraftChange = viewModel::onDraftChange,
-                onAreaSelected = viewModel::onAreaSelected,
-                onSave = viewModel::save,
-                onDone = viewModel::archive,
-                onOpenVorhaben = { captureId ->
-                    navController.navigate(workingSetRoute(captureId))
-                },
-                onOpenPlan = { captureId ->
-                    navController.navigate(planRoute(captureId = captureId))
-                },
-                onBack = navController::popBackStack,
-            )
-        }
-        composable(AppDestination.Create.route) {
-            CreateScreen(onBack = navController::popBackStack)
-        }
+
         composable(AppDestination.Settings.route) {
             val viewModel: SettingsViewModel = viewModel(
                 factory = SettingsViewModel.factory(appContainer),
@@ -306,9 +209,9 @@ fun AppNavHost(
                 onRefresh = viewModel::refresh,
                 onOpenDomains = { navController.navigate(AppDestination.SettingsDomains.route) },
                 onOpenSources = { navController.navigate(AppDestination.SettingsSources.route) },
-                onOpenResearch = { navController.navigate(AppDestination.SettingsResearch.route) },
             )
         }
+
         composable(AppDestination.SettingsDomains.route) {
             val viewModel: SettingsViewModel = viewModel(
                 factory = SettingsViewModel.factory(appContainer),
@@ -322,6 +225,7 @@ fun AppNavHost(
                 },
             )
         }
+
         composable(
             route = SettingsDomainPattern,
             arguments = listOf(
@@ -346,6 +250,7 @@ fun AppNavHost(
                 onSaveManualMetric = viewModel::saveManualMetric,
             )
         }
+
         composable(AppDestination.SettingsSources.route) {
             val viewModel: SettingsViewModel = viewModel(
                 factory = SettingsViewModel.factory(appContainer),
@@ -356,18 +261,6 @@ fun AppNavHost(
                 onBack = navController::popBackStack,
                 onRefresh = viewModel::refresh,
                 onSetSourceEnabled = viewModel::setSourceEnabled,
-            )
-        }
-        composable(AppDestination.SettingsResearch.route) {
-            val viewModel: SettingsViewModel = viewModel(
-                factory = SettingsViewModel.factory(appContainer),
-            )
-            val state by viewModel.state.collectAsStateWithLifecycle()
-            SettingsResearchScreen(
-                state = state,
-                onBack = navController::popBackStack,
-                onLoadPersona = viewModel::loadPersona,
-                onRunAllPersonas = viewModel::runAllPersonas,
             )
         }
     }

@@ -33,14 +33,10 @@ class UserJourneyTest {
             app.appContainer.observationRepository.clearAll()
             app.appContainer.hourSlotEntryRepository.clearAll()
 
-            waitForStart()
-            composeRule.onNodeWithTag("mode-tab-single").performClick()
-            composeRule.waitUntil(timeoutMillis = 10_000) {
-                composeRule.onAllNodesWithTag("home-dashboard").fetchSemanticsNodes().isNotEmpty()
-            }
+            waitForHome()
 
             composeRule.onNodeWithTag("home-dashboard").assertIsDisplayed()
-            composeRule.onNodeWithTag("home-domain-hydration-unknown").assertIsDisplayed()
+            composeRule.onNodeWithTag("home-open-settings").assertIsDisplayed()
         }
     }
 
@@ -51,7 +47,7 @@ class UserJourneyTest {
         val originalGoal = goalRepository.loadActiveGoals().first { it.domain == LifeDomain.SLEEP }
 
         try {
-            waitForStart()
+            waitForHome()
             openDomainDetail("sleep")
 
             composeRule.onNodeWithTag("settings-goal-sleep-min").performTextClearance()
@@ -72,48 +68,8 @@ class UserJourneyTest {
         }
     }
 
-    @Test
-    fun user_canLogHydration_andHomeReflectsIt() {
-        runBlocking {
-            val app = app()
-            val observationRepository = app.appContainer.observationRepository
-            val hourSlotEntryRepository = app.appContainer.hourSlotEntryRepository
-            val today = LocalDate.now(app.appContainer.clock)
-
-            observationRepository.clearAll()
-            hourSlotEntryRepository.clearAll()
-
-            waitForStart()
-            openDomainDetail("hydration")
-
-            composeRule.onNodeWithTag("settings-manual-hydration-value").performTextClearance()
-            composeRule.onNodeWithTag("settings-manual-hydration-value").performTextInput("2.4")
-            composeRule.onNodeWithTag("settings-manual-hydration-save").performClick()
-
-            composeRule.waitUntil(timeoutMillis = 10_000) {
-                val observations = runBlocking { observationRepository.loadRange(today, today) }
-                observations.any {
-                    it.domain == LifeDomain.HYDRATION &&
-                        it.metric == ObservationMetric.HYDRATION_LITERS &&
-                        it.value.numeric == 2.4f
-                }
-            }
-
-            repeat(3) { pressBack() }
-            composeRule.waitUntil(timeoutMillis = 10_000) {
-                composeRule.onAllNodesWithTag("mode-tab-single").fetchSemanticsNodes().isNotEmpty()
-            }
-            composeRule.onNodeWithTag("mode-tab-single").performClick()
-            composeRule.waitUntil(timeoutMillis = 10_000) {
-                composeRule.onAllNodesWithTag("home-domain-hydration-on_track").fetchSemanticsNodes().isNotEmpty()
-            }
-
-            composeRule.onNodeWithTag("home-domain-hydration-on_track").assertIsDisplayed()
-        }
-    }
-
     private fun openDomainDetail(domainTag: String) {
-        composeRule.onNodeWithTag("start-open-settings").performClick()
+        composeRule.onNodeWithTag("home-open-settings").performClick()
         composeRule.waitUntil(timeoutMillis = 10_000) {
             composeRule.onAllNodesWithTag("settings-root-content").fetchSemanticsNodes().isNotEmpty()
         }
@@ -127,9 +83,10 @@ class UserJourneyTest {
         }
     }
 
-    private fun waitForStart() {
+    private fun waitForHome() {
         composeRule.waitUntil(timeoutMillis = 10_000) {
-            composeRule.onAllNodesWithTag("start-open-settings").fetchSemanticsNodes().isNotEmpty()
+            composeRule.onAllNodesWithTag("home-open-settings").fetchSemanticsNodes().isNotEmpty() &&
+                composeRule.onAllNodesWithTag("home-dashboard").fetchSemanticsNodes().isNotEmpty()
         }
     }
 

@@ -37,7 +37,7 @@ class HeuristicLocalAssistGateway : LocalAssistGateway {
                 "Ziehe die eigentliche Frage heraus und mache daraus ein einzelnes Vorhaben."
             }
             normalized.length > 120 -> {
-                "Brich den Gedanken auf den kleinsten nächsten Schritt herunter und plane nur diesen."
+                "Brich den Gedanken auf den kleinsten naechsten Schritt herunter und plane nur diesen."
             }
             else -> {
                 "Mache daraus ein Vorhaben und gib ihm einen ersten 15-Minuten-Schritt."

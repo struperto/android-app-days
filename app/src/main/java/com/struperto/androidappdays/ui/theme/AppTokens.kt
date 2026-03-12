@@ -64,11 +64,11 @@ private fun appTextStyle(
 }
 
 val AppTypographyDefault = AppTypography(
-    display = appTextStyle(28.sp, FontWeight.SemiBold, 0.5.sp),
-    title = appTextStyle(18.sp, FontWeight.Medium),
-    body = appTextStyle(14.sp, FontWeight.Normal),
-    label = appTextStyle(12.sp, FontWeight.SemiBold, 1.2.sp),
-    mono = appTextStyle(11.sp, FontWeight.Medium, 1.1.sp, FontFamily.Monospace),
+    display = appTextStyle(30.sp, FontWeight.SemiBold, 0.1.sp),
+    title = appTextStyle(19.sp, FontWeight.SemiBold, 0.sp),
+    body = appTextStyle(14.sp, FontWeight.Normal, 0.1.sp),
+    label = appTextStyle(11.sp, FontWeight.Medium, 0.2.sp),
+    mono = appTextStyle(11.sp, FontWeight.Medium, 0.2.sp, FontFamily.Monospace),
 )
 
 data class AppDimensions(

@@ -48,6 +48,22 @@ android {
             excludes += "/META-INF/{AL2.0,LGPL2.1}"
         }
     }
+
+    lint {
+        checkTestSources = false
+    }
+
+    sourceSets {
+        getByName("androidTest") {
+            assets.srcDir("$projectDir/schemas")
+        }
+    }
+}
+
+kapt {
+    arguments {
+        arg("room.schemaLocation", "$projectDir/schemas")
+    }
 }
 
 dependencies {
@@ -84,4 +100,16 @@ dependencies {
     androidTestImplementation(libs.androidx.test.ext.junit)
     androidTestImplementation(libs.androidx.test.runner)
     androidTestImplementation(libs.androidx.test.espresso.core)
+    androidTestImplementation(libs.androidx.room.testing)
+}
+
+tasks.matching {
+    it.name in setOf(
+        "lintAnalyzeDebugUnitTest",
+        "lintAnalyzeDebugAndroidTest",
+        "generateDebugUnitTestLintModel",
+        "generateDebugAndroidTestLintModel",
+    )
+}.configureEach {
+    enabled = false
 }

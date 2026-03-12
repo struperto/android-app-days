@@ -59,6 +59,8 @@ data class LifeArea(
     val targetScore: Int,
     val sortOrder: Int,
     val isActive: Boolean,
+    val templateId: String = "free",
+    val iconKey: String = "spark",
 )
 
 data class LifeAreaDailyCheck(
@@ -76,6 +78,10 @@ data class LifeAreaProfile(
     val remindersEnabled: Boolean,
     val reviewEnabled: Boolean,
     val experimentsEnabled: Boolean,
+    val lageMode: String = "",
+    val directionMode: String = "",
+    val sourcesMode: String = "",
+    val flowProfile: String = "",
 )
 
 data class CalendarSignal(
@@ -98,6 +104,14 @@ data class NotificationSignal(
 data class SingleSetupState(
     val isLifeWheelConfigured: Boolean,
 )
+
+data class LifeAreaInventory(
+    val activeAreas: List<LifeArea>,
+    val inactiveAreas: List<LifeArea>,
+) {
+    val hasPersistedAreas: Boolean
+        get() = activeAreas.isNotEmpty() || inactiveAreas.isNotEmpty()
+}
 
 enum class TimeBlock(
     val persistedValue: String,

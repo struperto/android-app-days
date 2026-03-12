@@ -8,12 +8,14 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import com.struperto.androidappdays.data.repository.TimeBlock
 
 data class ChoiceChipItem(
     val id: String,
     val label: String,
+    val testTag: String? = null,
 )
 
 @Composable
@@ -32,6 +34,7 @@ fun ChoiceChipRow(
             FilterChip(
                 selected = item.id == selectedId,
                 onClick = { onSelect(item.id) },
+                modifier = item.testTag?.let { Modifier.testTag(it) } ?: Modifier,
                 label = {
                     Text(
                         text = item.label,
@@ -60,6 +63,7 @@ fun MultiChoiceChipRow(
             FilterChip(
                 selected = item.id in selectedIds,
                 onClick = { onToggle(item.id) },
+                modifier = item.testTag?.let { Modifier.testTag(it) } ?: Modifier,
                 label = {
                     Text(
                         text = item.label,

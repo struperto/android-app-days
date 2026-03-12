@@ -25,6 +25,7 @@ fun DaysModeTopBar(
     onOpenMulti: () -> Unit,
     onOpenSettings: () -> Unit,
     settingsTestTag: String,
+    showMulti: Boolean = false,
     modifier: Modifier = Modifier,
 ) {
     Row(
@@ -45,6 +46,7 @@ fun DaysModeTopBar(
                 onOpenStart = onOpenStart,
                 onOpenSingle = onOpenSingle,
                 onOpenMulti = onOpenMulti,
+                showMulti = showMulti,
             )
         }
         FilledTonalIconButton(

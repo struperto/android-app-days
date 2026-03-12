@@ -19,6 +19,7 @@ fun ModeSwitchHeader(
     onOpenStart: () -> Unit,
     onOpenSingle: () -> Unit,
     onOpenMulti: () -> Unit,
+    showMulti: Boolean,
     modifier: Modifier = Modifier,
 ) {
     Row(
@@ -38,12 +39,14 @@ fun ModeSwitchHeader(
             onClick = onOpenSingle,
             testTag = "mode-tab-single",
         )
-        ModeSwitchLabel(
-            label = AppDestination.Multi.title,
-            isActive = activeDestination == AppDestination.Multi,
-            onClick = onOpenMulti,
-            testTag = "mode-tab-multi",
-        )
+        if (showMulti) {
+            ModeSwitchLabel(
+                label = AppDestination.Multi.title,
+                isActive = activeDestination == AppDestination.Multi,
+                onClick = onOpenMulti,
+                testTag = "mode-tab-multi",
+            )
+        }
     }
 }
 

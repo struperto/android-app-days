@@ -14,7 +14,7 @@ class DaysApp : Application() {
     override fun onCreate() {
         super.onCreate()
         applicationScope.launch {
-            appContainer.seedDefaults()
+            appContainer.ensureAppBootstrapped()
         }
     }
 }

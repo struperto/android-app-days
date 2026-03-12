@@ -30,7 +30,6 @@ import androidx.compose.material.icons.outlined.EditNote
 import androidx.compose.material.icons.outlined.FavoriteBorder
 import androidx.compose.material.icons.outlined.Hotel
 import androidx.compose.material.icons.outlined.NotificationsActive
-import androidx.compose.material.icons.outlined.PlayArrow
 import androidx.compose.material.icons.outlined.Restaurant
 import androidx.compose.material.icons.outlined.Save
 import androidx.compose.material.icons.outlined.Sync
@@ -81,7 +80,6 @@ fun SettingsScreen(
     onRefresh: () -> Unit,
     onOpenDomains: () -> Unit,
     onOpenSources: () -> Unit,
-    onOpenResearch: () -> Unit,
 ) {
     LifecycleResumeEffect(Unit) {
         onRefresh()
@@ -110,7 +108,7 @@ fun SettingsScreen(
             )
             SectionHeader(
                 title = "Struktur",
-                detail = "Einstellungen sind jetzt Hub und nicht mehr Sammelseite. Domaenen, Quellen und Research leben getrennt.",
+                detail = "Einstellungen bleiben schlank. Domaenen und Quellen liegen hier klar getrennt vom Produktfluss.",
             )
             SettingsMenuCard(
                 title = "Domaenen",
@@ -125,13 +123,6 @@ fun SettingsScreen(
                 pill = "${state.sources.count { it.enabled }} aktiv",
                 testTag = "settings-menu-sources",
                 onClick = onOpenSources,
-            )
-            SettingsMenuCard(
-                title = "Research",
-                detail = "Hypothesen, Persona Lab und interne Test-/Debug-Schleifen an einem Ort.",
-                pill = "${state.hypotheses.size} Muster",
-                testTag = "settings-menu-research",
-                onClick = onOpenResearch,
             )
         }
     }
@@ -184,7 +175,6 @@ fun SettingsDomainDetailScreen(
     val catalog = state.catalog.firstOrNull { it.domain == domain }
     val goals = state.goals.filter { it.domain == domain }
     val manualMetrics = state.manualMetrics.filter { it.domain == domain }
-    val hypotheses = state.hypotheses.filter { it.domain == domain }
 
     DaysPageScaffold(
         title = catalog?.title ?: domain.name,
@@ -206,7 +196,6 @@ fun SettingsDomainDetailScreen(
                 domain = domain,
                 goals = goals,
                 manualMetrics = manualMetrics,
-                hypotheses = hypotheses,
                 sources = state.sources,
                 sourceDetail = relevantSourcesFor(domain),
                 onSaveGoal = onSaveGoal,
@@ -287,7 +276,6 @@ private fun DomainWorkbenchTile(
     domain: LifeDomain,
     goals: List<SettingsGoalItem>,
     manualMetrics: List<SettingsManualMetricItem>,
-    hypotheses: List<SettingsHypothesisItem>,
     sources: List<SettingsSourceItem>,
     sourceDetail: String,
     onSaveGoal: (String, String, String, String, String) -> Unit,
@@ -335,7 +323,7 @@ private fun DomainWorkbenchTile(
                 sources = relevantSources,
             )
 
-            if (goals.isEmpty() && manualMetrics.isEmpty() && hypotheses.isEmpty()) {
+            if (goals.isEmpty() && manualMetrics.isEmpty()) {
                 WorkbenchDivider()
                 Text(
                     text = "Diese Domaene ist vorbereitet. Sobald Ziel oder Tageswert auftauchen, landen sie gesammelt hier.",
@@ -374,16 +362,6 @@ private fun DomainWorkbenchTile(
                 }
             }
 
-            if (hypotheses.isNotEmpty()) {
-                WorkbenchDivider()
-                SectionText(label = "Muster")
-                hypotheses.forEachIndexed { index, item ->
-                    if (index > 0) {
-                        WorkbenchDivider()
-                    }
-                    HypothesisWorkbenchBlock(item = item)
-                }
-            }
         }
     }
 }
@@ -609,193 +587,6 @@ fun SettingsSourcesScreen(
                         }
                     },
                 )
-            }
-        }
-    }
-}
-
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-fun SettingsResearchScreen(
-    state: SettingsUiState,
-    onBack: () -> Unit,
-    onLoadPersona: (String) -> Unit,
-    onRunAllPersonas: () -> Unit,
-) {
-    DaysPageScaffold(
-        title = "Research",
-        onBack = onBack,
-        modifier = Modifier.testTag("settings-research"),
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .testTag("settings-research-content"),
-            verticalArrangement = Arrangement.spacedBy(18.dp)
-        ) {
-            SectionHeader(
-                title = "Persona Lab",
-                detail = "Interner Debug-Modus fuer reproduzierbare Home-Tests, visuelle Regression und Hypothesenpruefung.",
-            )
-            PersonaLabCard(
-                state = state.personaLab,
-                onLoadPersona = onLoadPersona,
-                onRunAllPersonas = onRunAllPersonas,
-            )
-            SectionHeader(
-                title = "Hypothesen",
-                detail = "Nur weiche Vermutungen, nie harte Kausalitaet.",
-            )
-            if (state.hypotheses.isEmpty()) {
-                PlaceholderCard(
-                    title = "Noch vorsichtig",
-                    detail = "Sobald wiederkehrende Muster sichtbar sind, tauchen hier nur weiche Hypothesen auf.",
-                )
-            } else {
-                state.hypotheses.forEach { item ->
-                    HypothesisCard(item = item)
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun PersonaLabCard(
-    state: SettingsPersonaLabState,
-    onLoadPersona: (String) -> Unit,
-    onRunAllPersonas: () -> Unit,
-) {
-    Card(
-        modifier = Modifier.testTag("research-persona-lab"),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
-        ),
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(18.dp),
-            verticalArrangement = Arrangement.spacedBy(14.dp),
-        ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Column(
-                    modifier = Modifier.weight(1f),
-                    verticalArrangement = Arrangement.spacedBy(4.dp),
-                ) {
-                    Text(
-                        text = state.statusTitle,
-                        modifier = Modifier.testTag("research-status-title"),
-                        style = MaterialTheme.typography.titleMedium,
-                    )
-                    Text(
-                        text = state.statusDetail,
-                        modifier = Modifier.testTag("research-status-detail"),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-                TextButton(
-                    onClick = onRunAllPersonas,
-                    modifier = Modifier.testTag("research-run-all"),
-                ) {
-                    Icon(imageVector = Icons.Outlined.PlayArrow, contentDescription = null)
-                    Text(text = "Alle", modifier = Modifier.padding(start = 6.dp))
-                }
-            }
-            PilotFocusCard()
-            state.personas.forEach { persona ->
-                PersonaRow(
-                    item = persona,
-                    selected = state.activePersonaId == persona.id,
-                    onLoad = { onLoadPersona(persona.id) },
-                )
-            }
-        }
-    }
-}
-
-@Composable
-private fun PilotFocusCard() {
-    Surface(
-        shape = RoundedCornerShape(18.dp),
-        color = MaterialTheme.colorScheme.surface,
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 14.dp, vertical = 12.dp),
-            verticalArrangement = Arrangement.spacedBy(6.dp),
-        ) {
-            Text(
-                text = "Pilot-Fokus",
-                style = MaterialTheme.typography.labelLarge,
-                color = MaterialTheme.colorScheme.primary,
-            )
-            Text(
-                text = "Lena, Mara, Jonas, Paul",
-                style = MaterialTheme.typography.titleSmall,
-            )
-            Text(
-                text = "Prueft gute Tage, Sparse Data, Abendfokus und vernetzte Belastung direkt auf Home.",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
-    }
-}
-
-@Composable
-private fun PersonaRow(
-    item: SettingsPersonaItem,
-    selected: Boolean,
-    onLoad: () -> Unit,
-) {
-    Surface(
-        modifier = Modifier.testTag("research-persona-${item.id}"),
-        shape = RoundedCornerShape(18.dp),
-        color = if (selected) {
-            MaterialTheme.colorScheme.secondaryContainer
-        } else {
-            MaterialTheme.colorScheme.surface
-        },
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 14.dp, vertical = 12.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Column(
-                modifier = Modifier.weight(1f),
-                verticalArrangement = Arrangement.spacedBy(3.dp),
-            ) {
-                Text(
-                    text = item.name,
-                    style = MaterialTheme.typography.titleSmall,
-                )
-                Text(
-                    text = item.archetype,
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.primary,
-                )
-                Text(
-                    text = item.summary,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-            Spacer(modifier = Modifier.width(10.dp))
-            TextButton(
-                onClick = onLoad,
-                modifier = Modifier.testTag("research-load-persona-${item.id}"),
-            ) {
-                Text(text = if (selected) "Neu" else "Laden")
             }
         }
     }
@@ -1106,132 +897,6 @@ private fun SignalPill(item: SettingsSourceItem) {
             style = MaterialTheme.typography.labelLarge,
             color = if (active) MaterialTheme.colorScheme.onSecondaryContainer else AppTheme.colors.muted,
         )
-    }
-}
-
-@Composable
-private fun HypothesisWorkbenchBlock(item: SettingsHypothesisItem) {
-    Column(
-        verticalArrangement = Arrangement.spacedBy(6.dp),
-    ) {
-        Row(
-            horizontalArrangement = Arrangement.spacedBy(10.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            StatusPill(label = item.confidenceLabel)
-            Text(
-                text = item.label,
-                style = MaterialTheme.typography.titleMedium,
-            )
-        }
-        Text(
-            text = item.detail,
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-    }
-}
-
-@Composable
-private fun CatalogCard(item: SettingsCatalogItem) {
-    Card {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(18.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Column(
-                modifier = Modifier.weight(1f),
-                verticalArrangement = Arrangement.spacedBy(4.dp),
-            ) {
-                Text(text = item.title, style = MaterialTheme.typography.titleMedium)
-                Text(
-                    text = item.summary,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-            StatusPill(label = item.statusLabel)
-        }
-    }
-}
-
-@Composable
-private fun HypothesisCard(item: SettingsHypothesisItem) {
-    Card(
-        colors = CardDefaults.cardColors(
-            containerColor = AppTheme.colors.surfaceStrong.copy(alpha = 0.98f),
-        ),
-        shape = RoundedCornerShape(28.dp),
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(18.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp),
-        ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(12.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    DomainChipIcon(domain = item.domain)
-                    Text(text = item.label, style = MaterialTheme.typography.titleMedium)
-                }
-                StatusPill(label = item.confidenceLabel)
-            }
-            Text(
-                text = item.detail,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
-    }
-}
-
-@Composable
-private fun DomainChipIcon(domain: LifeDomain) {
-    Box(
-        modifier = Modifier
-            .size(40.dp)
-            .clip(CircleShape)
-            .background(settingsDomainTint(domain).copy(alpha = 0.12f)),
-        contentAlignment = Alignment.Center,
-    ) {
-        Icon(
-            imageVector = settingsDomainIcon(domain),
-            contentDescription = null,
-            tint = settingsDomainTint(domain),
-            modifier = Modifier.size(20.dp),
-        )
-    }
-}
-
-@Composable
-private fun PlaceholderCard(
-    title: String,
-    detail: String,
-) {
-    Card(
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.primaryContainer,
-        ),
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(18.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            Text(text = title, style = MaterialTheme.typography.titleMedium)
-            Text(text = detail, style = MaterialTheme.typography.bodyMedium)
-        }
     }
 }
 

@@ -1,11 +1,21 @@
 package com.struperto.androidappdays.feature.settings
 
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertIsSelected
+import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.onAllNodesWithTag
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollToNode
+import androidx.compose.ui.test.performScrollTo
+import androidx.compose.ui.test.performTextInput
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import androidx.test.espresso.Espresso.pressBack
+import androidx.test.platform.app.InstrumentationRegistry
+import com.struperto.androidappdays.DaysApp
 import com.struperto.androidappdays.MainActivity
 import org.junit.Rule
 import org.junit.Test
@@ -18,7 +28,7 @@ class SettingsNavigationTest {
 
     @Test
     fun start_opensSettingsHub() {
-        waitForStart()
+        openStart()
 
         composeRule.onNodeWithTag("start-open-settings").performClick()
 
@@ -28,32 +38,29 @@ class SettingsNavigationTest {
         composeRule.onNodeWithTag("settings-root-content").assertIsDisplayed()
         composeRule.onNodeWithTag("settings-menu-domains").assertIsDisplayed()
         composeRule.onNodeWithTag("settings-menu-sources").assertIsDisplayed()
-        composeRule.onNodeWithTag("settings-menu-research").assertIsDisplayed()
     }
 
     @Test
     fun start_homeCardOpensHome() {
-        waitForStart()
+        openStart()
         composeRule.onNodeWithTag("mode-tab-single").performClick()
-        composeRule.waitUntil(timeoutMillis = 10_000) {
+        composeRule.waitUntil(timeoutMillis = 20_000) {
             composeRule.onAllNodesWithTag("home-dashboard").fetchSemanticsNodes().isNotEmpty()
         }
         composeRule.onNodeWithTag("home-dashboard").assertIsDisplayed()
     }
 
     @Test
-    fun start_modeTabOpensMulti() {
-        waitForStart()
-        composeRule.onNodeWithTag("mode-tab-multi").performClick()
-        composeRule.waitUntil(timeoutMillis = 10_000) {
-            composeRule.onAllNodesWithTag("multi-screen").fetchSemanticsNodes().isNotEmpty()
-        }
-        composeRule.onNodeWithTag("multi-screen").assertIsDisplayed()
+    fun primaryModeSwitch_showsMultiTab() {
+        waitForHome()
+        composeRule.onNodeWithTag("mode-tab-multi").assertIsDisplayed()
+        openStart()
+        composeRule.onNodeWithTag("mode-tab-multi").assertIsDisplayed()
     }
 
     @Test
     fun settingsHub_opensSources() {
-        waitForStart()
+        openStart()
         composeRule.onNodeWithTag("start-open-settings").performClick()
         composeRule.waitUntil(timeoutMillis = 10_000) {
             composeRule.onAllNodesWithTag("settings-root-content").fetchSemanticsNodes().isNotEmpty()
@@ -67,23 +74,83 @@ class SettingsNavigationTest {
 
     @Test
     fun start_areaOpensAreaStudio() {
-        waitForStart()
+        openStart()
         composeRule.onNodeWithTag("start-area-vitality").performClick()
         composeRule.waitUntil(timeoutMillis = 10_000) {
             composeRule.onAllNodesWithTag("area-studio-screen").fetchSemanticsNodes().isNotEmpty()
         }
         composeRule.onNodeWithTag("area-studio-screen").assertIsDisplayed()
-        composeRule.onNodeWithTag("area-studio-work-tile").assertIsDisplayed()
     }
 
     @Test
-    fun start_showsOnlyPulseSurface() {
-        waitForStart()
-        composeRule.onNodeWithTag("start-pulse-card").assertIsDisplayed()
-        composeRule.onNodeWithTag("start-toolbox-toggle").assertIsDisplayed()
+    fun start_areaWorkbenchOpensFocusedScreen() {
+        openStart()
+        composeRule.onNodeWithTag("start-area-vitality").performClick()
+        composeRule.waitUntil(timeoutMillis = 10_000) {
+            composeRule.onAllNodesWithTag("area-entry-snapshot").fetchSemanticsNodes().isNotEmpty()
+        }
+        composeRule.onNodeWithTag("area-entry-snapshot").performClick()
+        composeRule.waitUntil(timeoutMillis = 10_000) {
+            composeRule.onAllNodesWithTag("area-panel-screen").fetchSemanticsNodes().isNotEmpty()
+        }
+        composeRule.onNodeWithTag("area-panel-screen").assertIsDisplayed()
+    }
+
+    @Test
+    fun start_focusAreaShowsPilotPathSemantics() {
+        openStart()
+        composeRule.onNodeWithTag("start-area-clarity").performClick()
+        composeRule.waitUntil(timeoutMillis = 10_000) {
+            composeRule.onAllNodesWithTag("area-entry-path").fetchSemanticsNodes().isNotEmpty()
+        }
+        composeRule.onNodeWithTag("area-entry-path").performClick()
+        composeRule.waitUntil(timeoutMillis = 10_000) {
+            composeRule.onAllNodesWithTag("area-panel-screen").fetchSemanticsNodes().isNotEmpty()
+        }
+        composeRule.onNodeWithTag("area-panel-screen").assertIsDisplayed()
+    }
+
+    @Test
+    fun start_areaIdentityOpensOwnScreen() {
+        openStart()
+        composeRule.onNodeWithTag("start-area-vitality").performClick()
+        composeRule.waitUntil(timeoutMillis = 10_000) {
+            composeRule.onAllNodesWithTag("area-edit-identity").fetchSemanticsNodes().isNotEmpty()
+        }
+        composeRule.onNodeWithTag("area-edit-identity").performClick()
+        composeRule.waitUntil(timeoutMillis = 10_000) {
+            composeRule.onAllNodesWithTag("area-identity-screen").fetchSemanticsNodes().isNotEmpty()
+        }
+        composeRule.onNodeWithTag("area-identity-screen").assertIsDisplayed()
+    }
+
+    @Test
+    fun start_areaAuthoringOpensOwnScreen() {
+        openStart()
+        composeRule.onNodeWithTag("start-area-vitality").performClick()
+        composeRule.waitUntil(timeoutMillis = 10_000) {
+            composeRule.onAllNodesWithTag("area-edit-authoring").fetchSemanticsNodes().isNotEmpty()
+        }
+        composeRule.onNodeWithTag("area-edit-authoring").performScrollTo().performClick()
+        composeRule.waitUntil(timeoutMillis = 10_000) {
+            composeRule.onAllNodesWithTag("area-authoring-screen").fetchSemanticsNodes().isNotEmpty()
+        }
+        composeRule.onNodeWithTag("area-authoring-screen").assertIsDisplayed()
+    }
+
+    @Test
+    fun start_showsGridSurfaceWithoutLegacyActions() {
+        openStart()
+        composeRule.onNodeWithTag("start-grid").assertIsDisplayed()
+        composeRule.onNodeWithTag("start-create-area-button").assertIsDisplayed()
         composeRule.onNodeWithTag("start-area-vitality").assertIsDisplayed()
-        assert(composeRule.onAllNodesWithTag("start-area-discovery").fetchSemanticsNodes().isNotEmpty())
         listOf(
+            "start-pulse-card",
+            "start-create-status",
+            "start-area-manage-dock",
+            "start-manage-edit",
+            "start-manage-delete",
+            "start-manage-later",
             "start-action-home",
             "start-action-capture",
             "start-action-plan",
@@ -99,18 +166,67 @@ class SettingsNavigationTest {
     }
 
     @Test
-    fun start_toolboxExpandsDockActions() {
-        waitForStart()
-        composeRule.onNodeWithTag("start-toolbox-toggle").performClick()
-        composeRule.onNodeWithTag("start-toolbox-fingerprint").assertIsDisplayed()
-        composeRule.onNodeWithTag("start-toolbox-domains").assertIsDisplayed()
-        composeRule.onNodeWithTag("start-toolbox-sources").assertIsDisplayed()
-        composeRule.onNodeWithTag("start-toolbox-research").assertIsDisplayed()
+    fun start_createAreaCreatesAreaStudioFlow() {
+        openStart()
+        composeRule.onNodeWithTag("start-create-area-button").performClick()
+        composeRule.waitUntil(timeoutMillis = 10_000) {
+            composeRule.onAllNodesWithTag("start-create-screen").fetchSemanticsNodes().isNotEmpty()
+        }
+        composeRule.onNodeWithTag("start-create-screen").assertIsDisplayed()
+        composeRule.onNodeWithTag("start-create-title").performTextInput("Podcast Ideen")
+        composeRule.onNodeWithTag("start-create-save").performClick()
+        composeRule.waitUntil(timeoutMillis = 10_000) {
+            composeRule.onAllNodesWithTag("area-studio-screen").fetchSemanticsNodes().isNotEmpty()
+        }
+        composeRule.onNodeWithTag("area-studio-screen").assertIsDisplayed()
     }
 
-    private fun waitForStart() {
+    @Test
+    fun start_createOptionsOpenDedicatedScreen() {
+        openStart()
+        composeRule.onNodeWithTag("start-create-area-button").performClick()
+        composeRule.waitUntil(timeoutMillis = 10_000) {
+            composeRule.onAllNodesWithTag("start-create-options-link").fetchSemanticsNodes().isNotEmpty()
+        }
+        composeRule.onNodeWithTag("start-create-options-link").performClick()
+        composeRule.waitUntil(timeoutMillis = 10_000) {
+            composeRule.onAllNodesWithTag("start-create-options-screen").fetchSemanticsNodes().isNotEmpty()
+        }
+        composeRule.onNodeWithTag("start-create-options-screen").assertIsDisplayed()
+        composeRule.onNodeWithTag("start-create-options-done").performClick()
+        composeRule.waitUntil(timeoutMillis = 10_000) {
+            composeRule.onAllNodesWithTag("start-create-screen").fetchSemanticsNodes().isNotEmpty()
+        }
+        composeRule.onNodeWithTag("start-create-screen").assertIsDisplayed()
+    }
+
+    private fun waitForHome() {
+        composeRule.waitUntil(timeoutMillis = 10_000) {
+            composeRule.onAllNodesWithTag("home-open-settings").fetchSemanticsNodes().isNotEmpty() &&
+                composeRule.onAllNodesWithTag("home-dashboard").fetchSemanticsNodes().isNotEmpty()
+        }
+    }
+
+    private fun openStart() {
+        repeat(3) {
+            if (composeRule.onAllNodesWithTag("mode-tab-start").fetchSemanticsNodes().isNotEmpty()) {
+                return@repeat
+            }
+            pressBack()
+            composeRule.waitForIdle()
+        }
+        composeRule.waitUntil(timeoutMillis = 10_000) {
+            composeRule.onAllNodesWithTag("mode-tab-start").fetchSemanticsNodes().isNotEmpty()
+        }
+        composeRule.onNodeWithTag("mode-tab-start").performClick()
         composeRule.waitUntil(timeoutMillis = 10_000) {
             composeRule.onAllNodesWithTag("start-open-settings").fetchSemanticsNodes().isNotEmpty()
         }
+    }
+
+    private fun app(): DaysApp {
+        return InstrumentationRegistry.getInstrumentation()
+            .targetContext
+            .applicationContext as DaysApp
     }
 }

@@ -3,6 +3,7 @@ package com.struperto.androidappdays.data.repository
 import androidx.room.Room
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
+import com.struperto.androidappdays.data.local.AreaInstanceEntity
 import com.struperto.androidappdays.data.local.SingleDatabase
 import java.time.Clock
 import java.time.Instant
@@ -20,6 +21,7 @@ import org.junit.runner.RunWith
 class SingleRepositoriesInstrumentedTest {
     private lateinit var database: SingleDatabase
     private lateinit var lifeWheelRepository: LifeWheelRepository
+    private lateinit var lifeAreaProfileRepository: LifeAreaProfileRepository
     private lateinit var captureRepository: CaptureRepository
     private lateinit var learningEventRepository: LearningEventRepository
     private lateinit var vorhabenRepository: VorhabenRepository
@@ -42,6 +44,11 @@ class SingleRepositoriesInstrumentedTest {
         lifeWheelRepository = RoomLifeWheelRepository(
             database = database,
             lifeWheelDao = database.lifeWheelDao(),
+            areaKernelDao = database.areaKernelDao(),
+            clock = clock,
+        )
+        lifeAreaProfileRepository = RoomLifeAreaProfileRepository(
+            areaKernelDao = database.areaKernelDao(),
             clock = clock,
         )
         captureRepository = RoomCaptureRepository(
@@ -174,5 +181,119 @@ class SingleRepositoriesInstrumentedTest {
         assertEquals("Strategieblock", fingerprint.priorityRules.first())
         assertEquals(1, learningEventRepository.observeDiscoveryDayCount().first())
         assertEquals(2, learningEventRepository.observeRecent().first().size)
+    }
+
+    @Test
+    fun deletedSeedArea_isNotRecreatedByEnsureSeededAreas() = runBlocking {
+        lifeWheelRepository.ensureSeededAreas()
+
+        lifeWheelRepository.deleteArea("vitality")
+        assertTrue(lifeWheelRepository.observeActiveAreas().first().none { it.id == "vitality" })
+
+        lifeWheelRepository.ensureSeededAreas()
+
+        assertTrue(lifeWheelRepository.observeActiveAreas().first().none { it.id == "vitality" })
+    }
+
+    @Test
+    fun editedSeedArea_isNotOverwrittenByEnsureSeededAreas() = runBlocking {
+        lifeWheelRepository.ensureSeededAreas()
+
+        lifeWheelRepository.updateArea(
+            id = "vitality",
+            label = "Eigene Vitalitaet",
+            definition = "Schlaf und Energie mit eigener Sprache pflegen",
+            targetScore = 2,
+        )
+
+        lifeWheelRepository.ensureSeededAreas()
+
+        val vitality = lifeWheelRepository.observeActiveAreas().first().first { it.id == "vitality" }
+        assertEquals("Eigene Vitalitaet", vitality.label)
+        assertEquals("Schlaf und Energie mit eigener Sprache pflegen", vitality.definition)
+        assertEquals(2, vitality.targetScore)
+    }
+
+    @Test
+    fun ensureSeededAreas_marksSetupConfiguredWhenLegacyAreasAlreadyExist() = runBlocking {
+        database.areaKernelDao().upsertAreaInstance(
+            AreaInstanceEntity(
+                areaId = "custom",
+                definitionId = "template:free",
+                title = "Eigener Bereich",
+                summary = "Bestehende Kernel-Instanz",
+                iconKey = "spark",
+                targetScore = 3,
+                sortOrder = 0,
+                isActive = true,
+                cadenceKey = "adaptive",
+                selectedTracks = "",
+                signalBlend = 60,
+                intensity = 3,
+                remindersEnabled = false,
+                reviewEnabled = true,
+                experimentsEnabled = false,
+                lageMode = "state",
+                directionMode = "balanced",
+                sourcesMode = "curated",
+                flowProfile = "stable",
+                authoringComplexity = "ADVANCED",
+                authoringVisibility = "standard",
+                templateId = "free",
+                createdAt = clock.millis(),
+                updatedAt = clock.millis(),
+            ),
+        )
+
+        lifeWheelRepository.ensureSeededAreas()
+
+        val setupState = lifeWheelRepository.loadSetupState()
+        val custom = lifeWheelRepository.observeActiveAreas().first().first { it.id == "custom" }
+
+        assertTrue(setupState.isLifeWheelConfigured)
+        assertEquals("Eigener Bereich", custom.label)
+        assertEquals("Bestehende Kernel-Instanz", custom.definition)
+        assertEquals("free", custom.templateId)
+    }
+
+    @Test
+    fun deletingArea_cleansProfilesAndDailyChecks() = runBlocking {
+        lifeWheelRepository.ensureSeededAreas()
+        lifeAreaProfileRepository.saveProfile(
+            LifeAreaProfile(
+                areaId = "vitality",
+                cadence = "adaptive",
+                intensity = 3,
+                signalBlend = 60,
+                selectedTracks = setOf("Schlaf", "Energie"),
+                remindersEnabled = true,
+                reviewEnabled = true,
+                experimentsEnabled = false,
+            ),
+        )
+        lifeWheelRepository.upsertDailyCheck(
+            areaId = "vitality",
+            date = "2026-03-07",
+            manualScore = 4,
+        )
+
+        lifeWheelRepository.deleteArea("vitality")
+
+        assertTrue(lifeWheelRepository.observeActiveAreas().first().none { it.id == "vitality" })
+        assertTrue(lifeWheelRepository.observeDailyChecks("2026-03-07").first().none { it.areaId == "vitality" })
+        assertTrue(lifeAreaProfileRepository.observeProfiles().first().none { it.areaId == "vitality" })
+    }
+
+    @Test
+    fun movingAreaEarlierAndLater_reordersActiveAreas() = runBlocking {
+        lifeWheelRepository.ensureSeededAreas()
+
+        lifeWheelRepository.moveAreaLater("vitality")
+        val afterLater = lifeWheelRepository.observeActiveAreas().first().take(3).map { it.id }
+        assertEquals(listOf("clarity", "vitality", "impact"), afterLater)
+
+        lifeWheelRepository.moveAreaEarlier("vitality")
+        val afterEarlier = lifeWheelRepository.observeActiveAreas().first().take(3).map { it.id }
+        assertEquals(listOf("vitality", "clarity", "impact"), afterEarlier)
     }
 }

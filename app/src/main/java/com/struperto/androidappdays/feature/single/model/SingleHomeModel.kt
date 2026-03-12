@@ -3,12 +3,14 @@ package com.struperto.androidappdays.feature.single.model
 import com.struperto.androidappdays.data.repository.CoachSuggestion
 import com.struperto.androidappdays.data.repository.DayRisk
 import com.struperto.androidappdays.data.repository.LifeArea
+import com.struperto.androidappdays.data.repository.LifeAreaDailyCheck
 import com.struperto.androidappdays.data.repository.PlanItem
 import com.struperto.androidappdays.data.repository.SignalEnvelope
 import com.struperto.androidappdays.data.repository.SignalKind
 import com.struperto.androidappdays.data.repository.SollDayLayer
 import com.struperto.androidappdays.data.repository.SollDayModel
 import com.struperto.androidappdays.data.repository.TimeBlock
+import com.struperto.androidappdays.domain.area.AreaTodayOutput
 import com.struperto.androidappdays.domain.EvaluationState
 import com.struperto.androidappdays.domain.HourSlotEntry
 import com.struperto.androidappdays.domain.HourSlotStatus
@@ -142,6 +144,8 @@ data class SingleHomeState(
     val segmentHints: Map<String, List<HomeDomainHint>>,
     val feedbackMessage: String? = null,
     val lifeAreas: List<LifeArea> = emptyList(),
+    val dailyChecks: Map<String, Int> = emptyMap(),
+    val areaDock: AreaTodayOutput? = null,
 )
 
 data class SingleHomeProjection(
@@ -152,6 +156,8 @@ data class SingleHomeProjection(
     val slotEntries: Map<String, HourSlotEntry> = emptyMap(),
     val feedbackMessage: String? = null,
     val lifeAreas: List<LifeArea> = emptyList(),
+    val dailyChecks: List<LifeAreaDailyCheck> = emptyList(),
+    val areaTodayOutputs: List<AreaTodayOutput> = emptyList(),
 )
 
 fun projectSingleHomeState(projection: SingleHomeProjection): SingleHomeState {
@@ -210,6 +216,18 @@ fun projectSingleHomeState(projection: SingleHomeProjection): SingleHomeState {
         segmentHints = projection.segmentHints,
         feedbackMessage = projection.feedbackMessage,
         lifeAreas = projection.lifeAreas,
+        dailyChecks = projection.dailyChecks.associate { check ->
+            check.areaId to check.manualScore
+        },
+        areaDock = projection.areaTodayOutputs
+            .sortedWith(
+                compareBy<AreaTodayOutput> { it.isEmptyState }
+                    .thenByDescending { it.usabilitySignal.ordinal }
+                    .thenByDescending { it.severity.ordinal }
+                    .thenByDescending { it.confidence }
+                    .thenBy { it.headline },
+            )
+            .firstOrNull(),
     )
 }
 

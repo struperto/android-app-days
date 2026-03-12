@@ -1,29 +1,32 @@
 # Android App Days
 
-Clean-slate Android app repo for the final `Days` product.
+Android app repo for the `Days` product.
 
 ## Product direction
 
-This repository is `Single`-first.
+The repo is currently `Single`-first.
 
-Current visible shape:
+Current visible product:
 - `Home`
 - `Einstellungen`
-- optional `Lebensrad` calibration
+- optional `Lebensrad`
 
-Current product idea:
-- `Home` is the day itself
+Current product thesis:
+- `Home` is the primary day surface
 - the mirror dashboard shows fit vs drift
-- block overlays are the real work surface
-- `+` is only a small quick add
-- passive context currently comes from carryover, calendar, and notification pressure
+- block overlays are the real action layer
+- `+` stays a small quick add entry
+- passive context is local-first and currently comes from carryover, calendar, and notification pressure
 
-Out of scope for the current foundation:
-- `Multi`
+Current exploration:
+- `Start` as a life-area surface with a fixed tile language
+
+Out of scope until the core loop is stable:
+- `Multi` as a shipped mode
 - `Assist` as a full mode
-- Operator / experiment surfaces
+- operator or lab surfaces as primary UI
 - cloud AI
-- large passive signal UI
+- large passive-signal dashboards
 
 ## Tech baseline
 
@@ -32,8 +35,8 @@ Out of scope for the current foundation:
 - Material 3
 - Navigation Compose
 - Room
-- Android minSdk 26
-- Android targetSdk 36
+- minSdk 26
+- targetSdk 36
 - JDK 17
 
 ## Local commands
@@ -42,23 +45,24 @@ Out of scope for the current foundation:
 ./gradlew :app:assembleDebug
 ./gradlew :app:testDebugUnitTest
 ./gradlew :app:compileDebugAndroidTestKotlin
+./gradlew :app:installDebug
+./scripts/capture_persona_dashboard_suite.sh
 ```
 
-## Product docs
+## Source Of Truth Docs
 
-The current product truth lives here:
-- `docs/single-v1.md`
+Keep product truth in a small set of docs:
+- `docs/decisions.md`
 - `docs/single-v1-contract.md`
 - `docs/single-ux-concept.md`
-- `docs/decisions.md`
+- `docs/single-domain-foundation.md`
+- `docs/start-v1.md`
+- `docs/tile-system.md`
+- `docs/mvp-user-test-scenarios.md`
 - `docs/parking-lot.md`
 
-## Current status
+## Repo hygiene
 
-The repository currently contains:
-- `single_home`
-- optional calibration and legacy slices kept compile-safe
-- local data + projection for a `Soll` / `Ist` day track
-
-The active visible loop is:
-`Home -> Block Overlay -> Home`
+- Temporary screenshots, XML dumps, and exported DB files do not belong in the repo root.
+- Put exploratory artifacts under ignored paths such as `tmp/` and remove them after review.
+- If a doc is not part of the active source of truth, merge or delete it instead of letting parallel variants drift.

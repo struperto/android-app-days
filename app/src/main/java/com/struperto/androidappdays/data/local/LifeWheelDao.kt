@@ -26,8 +26,25 @@ interface LifeWheelDao {
     )
     suspend fun getActiveAreas(): List<LifeAreaEntity>
 
+    @Query(
+        """
+        SELECT * FROM life_areas
+        ORDER BY sortOrder ASC
+        """,
+    )
+    suspend fun getAllAreas(): List<LifeAreaEntity>
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertAreas(entities: List<LifeAreaEntity>)
+
+    @Query(
+        """
+        UPDATE life_areas
+        SET sortOrder = sortOrder + 1
+        WHERE isActive = 1
+        """,
+    )
+    suspend fun shiftActiveAreasForward()
 
     @Query("DELETE FROM life_areas")
     suspend fun deleteAllAreas()
@@ -47,6 +64,53 @@ interface LifeWheelDao {
         label: String,
         definition: String,
         targetScore: Int,
+        updatedAt: Long,
+    )
+
+    @Query(
+        """
+        UPDATE life_areas
+        SET label = :label,
+            definition = :definition,
+            templateId = :templateId,
+            iconKey = :iconKey,
+            updatedAt = :updatedAt
+        WHERE id = :id
+        """,
+    )
+    suspend fun updateAreaIdentity(
+        id: String,
+        label: String,
+        definition: String,
+        templateId: String,
+        iconKey: String,
+        updatedAt: Long,
+    )
+
+    @Query(
+        """
+        UPDATE life_areas
+        SET sortOrder = :sortOrder,
+            updatedAt = :updatedAt
+        WHERE id = :id
+        """,
+    )
+    suspend fun updateAreaSortOrder(
+        id: String,
+        sortOrder: Int,
+        updatedAt: Long,
+    )
+
+    @Query(
+        """
+        UPDATE life_areas
+        SET isActive = 0,
+            updatedAt = :updatedAt
+        WHERE id = :id
+        """,
+    )
+    suspend fun deactivateArea(
+        id: String,
         updatedAt: Long,
     )
 
@@ -81,8 +145,24 @@ interface LifeWheelDao {
         date: String,
     )
 
+    @Query(
+        """
+        DELETE FROM life_area_daily_checks
+        WHERE areaId = :areaId
+        """,
+    )
+    suspend fun deleteDailyChecks(areaId: String)
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsertDailyCheck(entity: LifeAreaDailyCheckEntity)
+
+    @Query(
+        """
+        DELETE FROM life_area_profiles
+        WHERE areaId = :areaId
+        """,
+    )
+    suspend fun deleteProfile(areaId: String)
 
     @Query(
         """
@@ -92,6 +172,15 @@ interface LifeWheelDao {
         """,
     )
     fun observeSetupState(): Flow<SingleSetupStateEntity?>
+
+    @Query(
+        """
+        SELECT * FROM single_setup_state
+        WHERE id = 0
+        LIMIT 1
+        """,
+    )
+    suspend fun getSetupState(): SingleSetupStateEntity?
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsertSetupState(entity: SingleSetupStateEntity)

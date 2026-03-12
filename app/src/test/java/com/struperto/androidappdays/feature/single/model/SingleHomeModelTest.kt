@@ -11,8 +11,20 @@ import com.struperto.androidappdays.data.repository.SollDayLayerType
 import com.struperto.androidappdays.data.repository.SollDayModel
 import com.struperto.androidappdays.data.repository.SollDaySegment
 import com.struperto.androidappdays.data.repository.UserFingerprint
+import com.struperto.androidappdays.domain.area.AreaBehaviorClass
+import com.struperto.androidappdays.domain.area.AreaNextMeaningfulStep
+import com.struperto.androidappdays.domain.area.AreaSeverity
+import com.struperto.androidappdays.domain.area.AreaSourceTruth
+import com.struperto.androidappdays.domain.area.AreaStepKind
+import com.struperto.androidappdays.domain.area.AreaStepOrigin
+import com.struperto.androidappdays.domain.area.AreaStepStatus
+import com.struperto.androidappdays.domain.area.AreaTodayDockKind
+import com.struperto.androidappdays.domain.area.AreaTodayOutput
+import com.struperto.androidappdays.domain.area.AreaFreshnessBand
+import com.struperto.androidappdays.domain.area.AreaUsabilitySignal
 import com.struperto.androidappdays.domain.HourSlotEntry
 import com.struperto.androidappdays.domain.HourSlotStatus
+import java.time.Instant
 import java.time.LocalDate
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -136,6 +148,66 @@ class SingleHomeModelTest {
         assertEquals(HourSlotStatus.REDUCED, state.segments.first().slotStatus)
         assertEquals("sanfter fahren", state.segments.first().slotNote)
     }
+
+    @Test
+    fun projectState_prefers_non_empty_area_dock_over_empty_state() {
+        val state = projectSingleHomeState(
+            SingleHomeProjection(
+                today = LocalDate.of(2026, 3, 7),
+                dayModel = previewDayModel(),
+                areaTodayOutputs = listOf(
+                    areaOutput(
+                        headline = "Kein heutiger Zug verankert.",
+                        isEmptyState = true,
+                        usabilitySignal = AreaUsabilitySignal.EMPTY,
+                        severity = AreaSeverity.MEDIUM,
+                    ),
+                    areaOutput(
+                        headline = "Arbeit: Zug aktiv",
+                        isEmptyState = false,
+                        usabilitySignal = AreaUsabilitySignal.USEFUL,
+                        severity = AreaSeverity.MEDIUM,
+                    ),
+                ),
+            ),
+        )
+
+        assertEquals("Arbeit: Zug aktiv", state.areaDock?.headline)
+    }
+}
+
+private fun areaOutput(
+    headline: String,
+    isEmptyState: Boolean,
+    usabilitySignal: AreaUsabilitySignal,
+    severity: AreaSeverity,
+): AreaTodayOutput {
+    return AreaTodayOutput(
+        instanceId = headline,
+        date = LocalDate.of(2026, 3, 7),
+        generatedAt = Instant.parse("2026-03-07T08:00:00Z"),
+        behaviorClass = AreaBehaviorClass.PROGRESS,
+        headline = headline,
+        statusLabel = "Status",
+        recommendation = "Interpretation",
+        nextMeaningfulStep = AreaNextMeaningfulStep(
+            kind = AreaStepKind.do_step,
+            label = "Naechster Schritt",
+            status = if (isEmptyState) AreaStepStatus.EMPTY else AreaStepStatus.READY,
+            origin = if (isEmptyState) AreaStepOrigin.projected_empty_state else AreaStepOrigin.projected_from_plan,
+            isUserConfirmed = false,
+            fallbackLabel = "Naechster Schritt",
+        ),
+        evidenceSummary = "Evidenz",
+        sourceTruth = if (isEmptyState) AreaSourceTruth.missing else AreaSourceTruth.local_derived,
+        confidence = if (isEmptyState) 0.18f else 0.82f,
+        freshnessAt = Instant.parse("2026-03-07T08:00:00Z"),
+        freshnessBand = AreaFreshnessBand.FRESH,
+        severity = severity,
+        singleDockKind = AreaTodayDockKind.ACTION,
+        isEmptyState = isEmptyState,
+        usabilitySignal = usabilitySignal,
+    )
 }
 
 private fun previewDayModel(): SollDayModel {

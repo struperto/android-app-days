@@ -1,8 +1,8 @@
 # Parking Lot
 
-These are good ideas from the old project that should not be forgotten.
+These are ideas worth keeping in memory, but not in the active source of truth.
 
-They are intentionally parked until `Single` V1 is real and stable.
+They stay parked until `Single` V1 is stable enough that a new surface or capability can be added without weakening the core loop.
 
 ## Device and system intake
 
@@ -39,6 +39,7 @@ They are intentionally parked until `Single` V1 is real and stable.
 
 ## Product expansion
 
+- `Start` as a shipped primary mode
 - `Multi`
 - `Assist` as a full mode
 - `Coworker`

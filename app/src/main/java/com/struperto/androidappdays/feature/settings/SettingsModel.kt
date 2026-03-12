@@ -34,14 +34,6 @@ data class SettingsManualMetricItem(
     val valueText: String,
 )
 
-data class SettingsHypothesisItem(
-    val id: String,
-    val domain: LifeDomain,
-    val label: String,
-    val confidenceLabel: String,
-    val detail: String,
-)
-
 data class SettingsCatalogItem(
     val domain: LifeDomain,
     val title: String,
@@ -49,27 +41,11 @@ data class SettingsCatalogItem(
     val statusLabel: String,
 )
 
-data class SettingsPersonaItem(
-    val id: String,
-    val name: String,
-    val archetype: String,
-    val summary: String,
-)
-
-data class SettingsPersonaLabState(
-    val personas: List<SettingsPersonaItem> = emptyList(),
-    val activePersonaId: String? = null,
-    val statusTitle: String = "Persona Lab",
-    val statusDetail: String = "Noch kein Persona-Lauf gestartet.",
-)
-
 data class SettingsUiState(
     val title: String = "Einstellungen",
-    val personaLab: SettingsPersonaLabState = SettingsPersonaLabState(),
     val sources: List<SettingsSourceItem> = emptyList(),
     val goals: List<SettingsGoalItem> = emptyList(),
     val manualMetrics: List<SettingsManualMetricItem> = emptyList(),
     val catalog: List<SettingsCatalogItem> = emptyList(),
-    val hypotheses: List<SettingsHypothesisItem> = emptyList(),
     val healthPermissions: Set<String> = emptySet(),
 )

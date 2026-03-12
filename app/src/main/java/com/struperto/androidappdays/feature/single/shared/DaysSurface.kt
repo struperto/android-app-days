@@ -50,6 +50,7 @@ fun DaysPageScaffold(
     title: String,
     onBack: () -> Unit,
     modifier: Modifier = Modifier,
+    titleContent: (@Composable () -> Unit)? = null,
     action: DaysTopBarAction? = null,
     contentPadding: PaddingValues = PaddingValues(horizontal = 20.dp, vertical = 18.dp),
     content: @Composable ColumnScope.() -> Unit,
@@ -74,7 +75,7 @@ fun DaysPageScaffold(
             topBar = {
                 TopAppBar(
                     title = {
-                        Text(
+                        titleContent?.invoke() ?: Text(
                             text = title,
                             style = MaterialTheme.typography.titleLarge,
                         )

@@ -13,6 +13,8 @@ import androidx.room.RoomDatabase
         NotificationSignalEntity::class,
         UserFingerprintEntity::class,
         LearningEventEntity::class,
+        AreaInstanceEntity::class,
+        AreaSnapshotEntity::class,
         LifeAreaEntity::class,
         LifeAreaDailyCheckEntity::class,
         LifeAreaProfileEntity::class,
@@ -23,8 +25,8 @@ import androidx.room.RoomDatabase
         SourcePreferenceEntity::class,
         HourSlotEntryEntity::class,
     ],
-    version = 7,
-    exportSchema = false,
+    version = 13,
+    exportSchema = true,
 )
 abstract class SingleDatabase : RoomDatabase() {
     abstract fun captureItemDao(): CaptureItemDao
@@ -33,6 +35,7 @@ abstract class SingleDatabase : RoomDatabase() {
     abstract fun notificationSignalDao(): NotificationSignalDao
     abstract fun userFingerprintDao(): UserFingerprintDao
     abstract fun learningEventDao(): LearningEventDao
+    abstract fun areaKernelDao(): AreaKernelDao
     abstract fun lifeWheelDao(): LifeWheelDao
     abstract fun lifeAreaProfileDao(): LifeAreaProfileDao
     abstract fun domainGoalDao(): DomainGoalDao
@@ -145,6 +148,8 @@ data class LifeAreaEntity(
     val targetScore: Int,
     val sortOrder: Int,
     val isActive: Boolean,
+    val templateId: String,
+    val iconKey: String,
     val createdAt: Long,
     val updatedAt: Long,
 )

@@ -9,10 +9,12 @@ import com.struperto.androidappdays.AppContainer
 import com.struperto.androidappdays.data.repository.DateContext
 import com.struperto.androidappdays.data.repository.GoalRepository
 import com.struperto.androidappdays.data.repository.HourSlotEntryRepository
+import com.struperto.androidappdays.data.repository.AreaKernelRepository
 import com.struperto.androidappdays.data.repository.LearningEvent
 import com.struperto.androidappdays.data.repository.LearningEventRepository
 import com.struperto.androidappdays.data.repository.LearningEventType
 import com.struperto.androidappdays.data.repository.LifeArea
+import com.struperto.androidappdays.data.repository.LifeWheelRepository
 import com.struperto.androidappdays.data.repository.ObservationRepository
 import com.struperto.androidappdays.data.repository.PlanItem
 import com.struperto.androidappdays.data.repository.PlanRepository
@@ -37,6 +39,11 @@ import com.struperto.androidappdays.domain.DomainGoal
 import com.struperto.androidappdays.domain.DomainObservation
 import com.struperto.androidappdays.domain.HourSlotEntry
 import com.struperto.androidappdays.domain.HourSlotStatus
+import com.struperto.androidappdays.domain.area.AreaInstance
+import com.struperto.androidappdays.domain.area.AreaSnapshot
+import com.struperto.androidappdays.domain.area.AreaTodayOutput
+import com.struperto.androidappdays.domain.area.AreaTodayOutputInput
+import com.struperto.androidappdays.domain.area.projectAreaTodayOutput
 import com.struperto.androidappdays.domain.service.EvaluationEngineV0
 import com.struperto.androidappdays.domain.service.HomeDomainHintProjector
 import com.struperto.androidappdays.domain.service.ObservationSyncService
@@ -54,21 +61,14 @@ import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
-enum class HomeQuickAddTarget(
-    val label: String,
-) {
-    JETZT("Jetzt"),
-    SPAETER("Später"),
-}
-
 @OptIn(ExperimentalCoroutinesApi::class)
 class SingleHomeViewModel(
     private val signalRepository: SignalRepository,
     private val userFingerprintRepository: UserFingerprintRepository,
+    private val lifeWheelRepository: LifeWheelRepository,
+    private val areaKernelRepository: AreaKernelRepository,
     private val learningEventRepository: LearningEventRepository,
-    private val captureRepository: com.struperto.androidappdays.data.repository.CaptureRepository,
     private val planRepository: PlanRepository,
-    private val vorhabenRepository: com.struperto.androidappdays.data.repository.VorhabenRepository,
     private val goalRepository: GoalRepository,
     private val observationRepository: ObservationRepository,
     private val hourSlotEntryRepository: HourSlotEntryRepository,
@@ -134,14 +134,35 @@ class SingleHomeViewModel(
         )
     }
 
+    private val activeAreaInstances = areaKernelRepository.observeActiveInstances()
+    private val activeAreaSnapshots = areaKernelRepository.observeSnapshots(today)
+    private val areaKernelInputs = combine(
+        activeAreaInstances,
+        activeAreaSnapshots,
+    ) { areaInstances, areaSnapshots ->
+        areaInstances to areaSnapshots
+    }
+    private val lifeAreaInputs = combine(
+        lifeWheelRepository.observeDailyChecks(todayIso),
+        lifeWheelRepository.observeActiveAreas(),
+    ) { dailyChecks, activeAreas ->
+        dailyChecks to activeAreas
+    }
+
     private val homeInputs = combine(
         userFingerprintRepository.observe(),
         daySignals,
         behaviorInputs,
+        lifeAreaInputs,
+        areaKernelInputs,
     ) { fingerprint: UserFingerprint,
         signals: List<SignalEnvelope>,
         behavior: BehaviorInput,
+        lifeAreaInputs: Pair<List<com.struperto.androidappdays.data.repository.LifeAreaDailyCheck>, List<LifeArea>>,
+        areaKernelInputs: Pair<List<AreaInstance>, List<AreaSnapshot>>,
     ->
+        val (dailyChecks, activeAreas) = lifeAreaInputs
+        val (areaInstances, areaSnapshots) = areaKernelInputs
         HomeInput(
             fingerprint = fingerprint,
             signals = signals,
@@ -152,6 +173,23 @@ class SingleHomeViewModel(
             observations = behavior.domainInput.observations,
             hourSlotEntries = behavior.domainInput.hourSlotEntries,
             capabilityProfile = behavior.domainInput.capabilityProfile,
+            dailyChecks = dailyChecks,
+            lifeAreas = activeAreas,
+            areaTodayOutputs = areaInstances.map { instance ->
+                projectAreaTodayOutput(
+                    AreaTodayOutputInput(
+                        definition = com.struperto.androidappdays.domain.area.startAreaKernelDefinition(instance.definitionId),
+                        blueprint = com.struperto.androidappdays.domain.area.startAreaKernelBlueprint(instance.definitionId),
+                        instance = instance,
+                        snapshot = areaSnapshots.firstOrNull { it.areaId == instance.areaId },
+                        generatedAt = java.time.Instant.now(clock),
+                        openPlanTitles = behavior.todayPlans
+                            .filter { it.areaId == instance.areaId && !it.isDone }
+                            .map { it.title },
+                        dueCount = behavior.todayPlans.count { it.areaId == instance.areaId && !it.isDone },
+                    ),
+                )
+            },
         )
     }
 
@@ -210,9 +248,14 @@ class SingleHomeViewModel(
                 },
                 slotEntries = input.hourSlotEntries.associateBy(HourSlotEntry::segmentId),
                 feedbackMessage = feedback,
-                lifeAreas = input.fingerprint.lifeAreas
+                lifeAreas = input.lifeAreas
+                    .ifEmpty {
+                        input.fingerprint.lifeAreas.ifEmpty(::defaultLifeAreas)
+                    }
                     .ifEmpty(::defaultLifeAreas)
                     .sortedBy(LifeArea::sortOrder),
+                dailyChecks = input.dailyChecks,
+                areaTodayOutputs = input.areaTodayOutputs,
             ),
         )
     }.stateIn(
@@ -272,177 +315,16 @@ class SingleHomeViewModel(
         }
     }
 
-    fun submitQuickAdd(
-        text: String,
-        target: HomeQuickAddTarget,
-    ) {
-        val draft = text.trim()
-        if (draft.isBlank()) return
-        viewModelScope.launch {
-            val areaId = resolveAreaId()
-            when (target) {
-                HomeQuickAddTarget.JETZT -> {
-                    val window = HomeTrackWindow.fromLocalTime(LocalTime.now(clock))
-                    planRepository.addManual(
-                        title = titleFromText(draft),
-                        note = noteFromText(draft),
-                        areaId = areaId,
-                        timeBlock = preferredTimeBlockForWindow(window, LocalTime.now(clock)),
-                    )
-                    learningEventRepository.record(
-                        type = LearningEventType.QUICK_ADD_NOW,
-                        title = "Quick Add in den Tag",
-                        detail = draft,
-                    )
-                    feedbackMessage.value = "Liegt jetzt im ${window.feedbackLabel}."
-                }
-                HomeQuickAddTarget.SPAETER -> {
-                    vorhabenRepository.create(
-                        title = titleFromText(draft),
-                        note = noteFromText(draft),
-                        areaId = areaId,
-                    )
-                    learningEventRepository.record(
-                        type = LearningEventType.QUICK_ADD_LATER,
-                        title = "Quick Add fuer spaeter",
-                        detail = draft,
-                    )
-                    feedbackMessage.value = "Für später vorgemerkt."
-                }
-            }
-        }
-    }
-
-    fun captureToWindow(
-        captureId: String,
-        window: HomeTrackWindow,
-    ) {
-        viewModelScope.launch {
-            val capture = captureRepository.loadById(captureId) ?: return@launch
-            planRepository.addManual(
-                title = titleFromText(capture.text),
-                note = noteFromText(capture.text),
-                areaId = capture.areaId ?: resolveAreaId(),
-                timeBlock = preferredTimeBlockForWindow(window, LocalTime.now(clock)),
-            )
-            captureRepository.markConverted(captureId)
-            learningEventRepository.record(
-                type = LearningEventType.CAPTURE_TO_PLAN,
-                title = "Signal in den Soll-Tag gezogen",
-                detail = capture.text,
-            )
-            feedbackMessage.value = "Im ${window.feedbackLabel} eingeplant."
-        }
-    }
-
-    fun captureToLater(captureId: String) {
-        viewModelScope.launch {
-            val capture = captureRepository.loadById(captureId) ?: return@launch
-            vorhabenRepository.createFromCapture(
-                captureId = captureId,
-                title = titleFromText(capture.text),
-                note = noteFromText(capture.text),
-                areaId = capture.areaId ?: resolveAreaId(),
-            )
-            captureRepository.markConverted(captureId)
-            learningEventRepository.record(
-                type = LearningEventType.CAPTURE_TO_LATER,
-                title = "Signal in Spaeter verschoben",
-                detail = capture.text,
-            )
-            feedbackMessage.value = "Als späteres Thema abgelegt."
-        }
-    }
-
-    fun completeCapture(captureId: String) {
-        viewModelScope.launch {
-            captureRepository.archive(captureId)
-            feedbackMessage.value = "Signal abgeschlossen."
-        }
-    }
-
-    fun vorhabenToWindow(
-        vorhabenId: String,
-        window: HomeTrackWindow,
-    ) {
-        viewModelScope.launch {
-            val vorhaben = vorhabenRepository.loadById(vorhabenId) ?: return@launch
-            planRepository.addFromVorhaben(
-                vorhabenId = vorhabenId,
-                timeBlock = preferredTimeBlockForWindow(window, LocalTime.now(clock)),
-            )
-            learningEventRepository.record(
-                type = LearningEventType.LATER_TO_PLAN,
-                title = "Spaeter-Thema aktiviert",
-                detail = vorhaben.title,
-            )
-            feedbackMessage.value = "In ${window.feedbackLabel} gezogen."
-        }
-    }
-
-    fun completeVorhaben(vorhabenId: String) {
-        viewModelScope.launch {
-            val vorhaben = vorhabenRepository.loadById(vorhabenId) ?: return@launch
-            vorhabenRepository.archive(vorhabenId)
-            learningEventRepository.record(
-                type = LearningEventType.LATER_DONE,
-                title = "Spaeter-Thema abgeschlossen",
-                detail = vorhaben.title,
-            )
-            feedbackMessage.value = "Später-Eintrag abgeschlossen."
-        }
-    }
-
-    fun togglePlanDone(planId: String) {
-        viewModelScope.launch {
-            val plan = planRepository.loadById(planId)
-            planRepository.toggleDone(planId)
-            learningEventRepository.record(
-                type = LearningEventType.PLAN_TOGGLED,
-                title = "Planstatus angepasst",
-                detail = plan?.title.orEmpty(),
-            )
-            feedbackMessage.value = "Segment aktualisiert."
-        }
-    }
-
-    fun movePlanToWindow(
-        planId: String,
-        window: HomeTrackWindow,
-    ) {
-        viewModelScope.launch {
-            val plan = planRepository.loadById(planId)
-            planRepository.moveToTimeBlock(
-                id = planId,
-                timeBlock = preferredTimeBlockForWindow(window, LocalTime.now(clock)),
-            )
-            learningEventRepository.record(
-                type = LearningEventType.PLAN_MOVED,
-                title = "Plan in neuen Block verschoben",
-                detail = plan?.title.orEmpty(),
-            )
-            feedbackMessage.value = "In ${window.feedbackLabel} verschoben."
-        }
-    }
-
-    private suspend fun resolveAreaId(): String {
-        return userFingerprintRepository.load()
-            .lifeAreas
-            .ifEmpty(::defaultLifeAreas)
-            .first()
-            .id
-    }
-
     companion object {
         fun factory(appContainer: AppContainer): ViewModelProvider.Factory = viewModelFactory {
             initializer {
                 SingleHomeViewModel(
                     signalRepository = appContainer.signalRepository,
                     userFingerprintRepository = appContainer.userFingerprintRepository,
+                    lifeWheelRepository = appContainer.lifeWheelRepository,
+                    areaKernelRepository = appContainer.areaKernelRepository,
                     learningEventRepository = appContainer.learningEventRepository,
-                    captureRepository = appContainer.captureRepository,
                     planRepository = appContainer.planRepository,
-                    vorhabenRepository = appContainer.vorhabenRepository,
                     goalRepository = appContainer.goalRepository,
                     observationRepository = appContainer.observationRepository,
                     hourSlotEntryRepository = appContainer.hourSlotEntryRepository,
@@ -456,20 +338,6 @@ class SingleHomeViewModel(
             }
         }
     }
-}
-
-private fun titleFromText(text: String): String {
-    return text.lineSequence()
-        .firstOrNull()
-        .orEmpty()
-        .trim()
-        .take(60)
-}
-
-private fun noteFromText(text: String): String {
-    val trimmed = text.trim()
-    val title = titleFromText(trimmed)
-    return if (trimmed == title) "" else trimmed
 }
 
 private fun hourSlotFeedback(status: HourSlotStatus): String {
@@ -491,6 +359,9 @@ private data class HomeInput(
     val observations: List<DomainObservation>,
     val hourSlotEntries: List<HourSlotEntry>,
     val capabilityProfile: CapabilityProfile,
+    val dailyChecks: List<com.struperto.androidappdays.data.repository.LifeAreaDailyCheck>,
+    val lifeAreas: List<LifeArea>,
+    val areaTodayOutputs: List<AreaTodayOutput>,
 )
 
 private data class DomainInput(
@@ -524,6 +395,8 @@ private fun emptyState(today: LocalDate): SingleHomeState {
         segmentHints = emptyMap(),
         feedbackMessage = null,
         lifeAreas = defaultLifeAreas(),
+        dailyChecks = emptyMap(),
+        areaDock = null,
     )
 }
 

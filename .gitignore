@@ -8,6 +8,7 @@ local.properties
 **/build/
 /captures/
 /tmp/
+/artifacts/
 
 *.jks
 *.keystore
@@ -15,3 +16,10 @@ local.properties
 *.p12
 
 /.kotlin/
+/*.png
+/*.jpg
+/*.jpeg
+/*.db
+/*.db-shm
+/*.db-wal
+/window_dump*.xml

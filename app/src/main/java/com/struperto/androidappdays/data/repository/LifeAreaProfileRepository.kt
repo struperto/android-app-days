@@ -1,7 +1,6 @@
 package com.struperto.androidappdays.data.repository
 
-import com.struperto.androidappdays.data.local.LifeAreaProfileDao
-import com.struperto.androidappdays.data.local.LifeAreaProfileEntity
+import com.struperto.androidappdays.data.local.AreaKernelDao
 import java.time.Clock
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
@@ -12,44 +11,32 @@ interface LifeAreaProfileRepository {
 }
 
 class RoomLifeAreaProfileRepository(
-    private val dao: LifeAreaProfileDao,
+    private val areaKernelDao: AreaKernelDao,
     private val clock: Clock,
 ) : LifeAreaProfileRepository {
     override fun observeProfiles(): Flow<List<LifeAreaProfile>> {
-        return dao.observeProfiles().map { entities ->
-            entities.map(LifeAreaProfileEntity::toModel)
+        return areaKernelDao.observeActiveAreaInstances().map { entities ->
+            entities.map { entity -> entity.toLifeAreaProfile() }
         }
     }
 
     override suspend fun saveProfile(profile: LifeAreaProfile) {
-        dao.upsertProfile(
-            LifeAreaProfileEntity(
-                areaId = profile.areaId,
-                cadence = profile.cadence,
+        val current = areaKernelDao.getAreaInstance(profile.areaId) ?: return
+        areaKernelDao.upsertAreaInstance(
+            current.copy(
+                cadenceKey = profile.cadence,
                 intensity = profile.intensity.coerceIn(1, 5),
                 signalBlend = profile.signalBlend.coerceIn(0, 100),
-                selectedTracks = profile.selectedTracks.joinToString(","),
+                selectedTracks = encodeSelectedTracks(profile.selectedTracks),
                 remindersEnabled = profile.remindersEnabled,
                 reviewEnabled = profile.reviewEnabled,
                 experimentsEnabled = profile.experimentsEnabled,
+                lageMode = profile.lageMode,
+                directionMode = profile.directionMode,
+                sourcesMode = profile.sourcesMode,
+                flowProfile = profile.flowProfile,
                 updatedAt = clock.millis(),
             ),
         )
     }
-}
-
-private fun LifeAreaProfileEntity.toModel(): LifeAreaProfile {
-    return LifeAreaProfile(
-        areaId = areaId,
-        cadence = cadence,
-        intensity = intensity.coerceIn(1, 5),
-        signalBlend = signalBlend.coerceIn(0, 100),
-        selectedTracks = selectedTracks.split(",")
-            .map(String::trim)
-            .filter(String::isNotBlank)
-            .toSet(),
-        remindersEnabled = remindersEnabled,
-        reviewEnabled = reviewEnabled,
-        experimentsEnabled = experimentsEnabled,
-    )
 }

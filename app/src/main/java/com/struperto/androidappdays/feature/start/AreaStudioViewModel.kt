@@ -6,11 +6,19 @@ import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import com.struperto.androidappdays.AppContainer
-import com.struperto.androidappdays.data.repository.LifeArea
-import com.struperto.androidappdays.data.repository.LifeAreaProfile
-import com.struperto.androidappdays.data.repository.LifeAreaProfileRepository
-import com.struperto.androidappdays.data.repository.LifeWheelRepository
+import com.struperto.androidappdays.data.repository.AreaKernelRepository
+import com.struperto.androidappdays.data.repository.PlanRepository
+import com.struperto.androidappdays.domain.area.AreaComplexityLevel
+import com.struperto.androidappdays.domain.area.AreaDirectionMode
+import com.struperto.androidappdays.domain.area.AreaFlowProfile
+import com.struperto.androidappdays.domain.area.AreaInstance
+import com.struperto.androidappdays.domain.area.AreaLageMode
+import com.struperto.androidappdays.domain.area.AreaSnapshot
+import com.struperto.androidappdays.domain.area.AreaSourcesMode
+import com.struperto.androidappdays.domain.area.AreaVisibilityLevel
+import com.struperto.androidappdays.domain.area.withUpdatedIdentity
 import java.time.Clock
+import java.time.Instant
 import java.time.LocalDate
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.combine
@@ -19,19 +27,8 @@ import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
 
 data class AreaStudioAreaState(
-    val areaId: String,
-    val title: String,
-    val summary: String,
-    val tracks: List<String>,
-    val targetScore: Int,
-    val manualScore: Int?,
-    val cadence: String,
-    val intensity: Int,
-    val signalBlend: Int,
-    val selectedTracks: Set<String>,
-    val remindersEnabled: Boolean,
-    val reviewEnabled: Boolean,
-    val experimentsEnabled: Boolean,
+    val detail: StartAreaDetailState,
+    val authoring: AreaAuthoringStudioState,
 )
 
 data class AreaStudioUiState(
@@ -39,47 +36,56 @@ data class AreaStudioUiState(
 )
 
 class AreaStudioViewModel(
-    private val lifeWheelRepository: LifeWheelRepository,
-    private val lifeAreaProfileRepository: LifeAreaProfileRepository,
+    private val areaKernelRepository: AreaKernelRepository,
+    private val planRepository: PlanRepository,
     private val clock: Clock,
 ) : ViewModel() {
-    private val todayIso = LocalDate.now(clock).toString()
+    private val today = LocalDate.now(clock)
+    private val activeInstances = areaKernelRepository.observeActiveInstances().stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5_000),
+        initialValue = emptyList(),
+    )
+    private val todaySnapshots = areaKernelRepository.observeSnapshots(today).stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5_000),
+        initialValue = emptyList(),
+    )
+    private val todayPlans = planRepository.observeToday(today.toString()).stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5_000),
+        initialValue = emptyList(),
+    )
 
     val state = combine(
-        lifeWheelRepository.observeActiveAreas(),
-        lifeWheelRepository.observeDailyChecks(todayIso),
-        lifeAreaProfileRepository.observeProfiles(),
-    ) { activeAreas, dailyChecks, profiles ->
-        val areaMap = activeAreas.associateBy(LifeArea::id)
-        val checkMap = dailyChecks.associateBy { it.areaId }
-        val profileMap = profiles.associateBy(LifeAreaProfile::areaId)
+        activeInstances,
+        todaySnapshots,
+        todayPlans,
+    ) { instances, snapshots, plans ->
+        val snapshotMap = snapshots.associateBy(AreaSnapshot::areaId)
         AreaStudioUiState(
-            areas = startAreaBlueprints.associate { blueprint ->
-                val area = areaMap[blueprint.id] ?: LifeArea(
-                    id = blueprint.id,
-                    label = blueprint.label,
-                    definition = blueprint.summary,
-                    targetScore = 3,
-                    sortOrder = startAreaBlueprints.indexOf(blueprint),
-                    isActive = true,
-                )
-                val profile = profileMap[blueprint.id] ?: defaultProfile(blueprint)
-                blueprint.id to AreaStudioAreaState(
-                    areaId = blueprint.id,
-                    title = area.label,
-                    summary = blueprint.summary,
-                    tracks = blueprint.tracks,
-                    targetScore = area.targetScore,
-                    manualScore = checkMap[blueprint.id]?.manualScore,
-                    cadence = profile.cadence,
-                    intensity = profile.intensity,
-                    signalBlend = profile.signalBlend,
-                    selectedTracks = profile.selectedTracks.ifEmpty { blueprint.tracks.take(2).toSet() },
-                    remindersEnabled = profile.remindersEnabled,
-                    reviewEnabled = profile.reviewEnabled,
-                    experimentsEnabled = profile.experimentsEnabled,
-                )
-            },
+            areas = instances
+                .sortedBy(AreaInstance::sortOrder)
+                .associate { instance ->
+                    val detailInput = buildStartAreaDetailKernelInput(
+                        instance = instance,
+                        snapshot = snapshotMap[instance.areaId],
+                        todayPlans = plans,
+                        logicalDate = today,
+                        projectionTime = Instant.now(clock),
+                    )
+                    instance.areaId to AreaStudioAreaState(
+                        detail = projectStartAreaDetailState(detailInput),
+                        authoring = projectAreaAuthoringStudioState(
+                            AreaAuthoringProjectionInput(
+                                definition = detailInput.definition,
+                                blueprint = detailInput.blueprint,
+                                instance = instance,
+                                authoringConfig = instance.authoringConfig,
+                            ),
+                        ),
+                    )
+                },
         )
     }.stateIn(
         scope = viewModelScope,
@@ -91,13 +97,32 @@ class AreaStudioViewModel(
         areaId: String,
         value: Float,
     ) {
-        val current = state.value.areas[areaId] ?: return
+        val current = currentInstance(areaId) ?: return
         viewModelScope.launch {
-            lifeWheelRepository.updateArea(
-                id = areaId,
-                label = current.title,
-                definition = current.summary,
-                targetScore = value.roundToInt().coerceIn(1, 5),
+            areaKernelRepository.updateActiveInstance(
+                current.copy(
+                    targetScore = value.roundToInt().coerceIn(1, 5),
+                ),
+            )
+        }
+    }
+
+    fun setAreaIdentity(
+        areaId: String,
+        title: String,
+        summary: String,
+        templateId: String,
+        iconKey: String,
+    ) {
+        val current = currentInstance(areaId) ?: return
+        viewModelScope.launch {
+            areaKernelRepository.updateActiveInstance(
+                current.withUpdatedIdentity(
+                    title = title,
+                    summary = summary,
+                    templateId = templateId,
+                    iconKey = iconKey,
+                ),
             )
         }
     }
@@ -106,11 +131,95 @@ class AreaStudioViewModel(
         areaId: String,
         score: Int?,
     ) {
+        val currentSnapshot = currentSnapshot(areaId)
+        val now = Instant.now(clock)
         viewModelScope.launch {
-            lifeWheelRepository.upsertDailyCheck(
+            if (score == null && currentSnapshot?.manualStateKey == null && currentSnapshot?.manualNote == null) {
+                areaKernelRepository.clearSnapshot(
+                    areaId = areaId,
+                    date = today,
+                )
+            } else {
+                areaKernelRepository.upsertSnapshot(
+                    snapshot = AreaSnapshot(
+                        areaId = areaId,
+                        date = today,
+                        manualScore = score,
+                        manualStateKey = currentSnapshot?.manualStateKey,
+                        manualNote = currentSnapshot?.manualNote,
+                        confidence = currentSnapshot?.confidence,
+                        freshnessAt = now,
+                    ),
+                )
+            }
+        }
+    }
+
+    fun setManualState(
+        areaId: String,
+        stateKey: String?,
+    ) {
+        val currentSnapshot = currentSnapshot(areaId)
+        val now = Instant.now(clock)
+        viewModelScope.launch {
+            if (stateKey == null && currentSnapshot?.manualScore == null && currentSnapshot?.manualNote == null) {
+                areaKernelRepository.clearSnapshot(
+                    areaId = areaId,
+                    date = today,
+                )
+            } else {
+                areaKernelRepository.upsertSnapshot(
+                    snapshot = AreaSnapshot(
+                        areaId = areaId,
+                        date = today,
+                        manualScore = currentSnapshot?.manualScore,
+                        manualStateKey = stateKey,
+                        manualNote = currentSnapshot?.manualNote,
+                        confidence = currentSnapshot?.confidence,
+                        freshnessAt = now,
+                    ),
+                )
+            }
+        }
+    }
+
+    fun setManualNote(
+        areaId: String,
+        note: String?,
+    ) {
+        val normalizedNote = note?.trim()?.takeIf(String::isNotBlank)
+        val currentSnapshot = currentSnapshot(areaId)
+        val now = Instant.now(clock)
+        viewModelScope.launch {
+            if (normalizedNote == null &&
+                currentSnapshot?.manualScore == null &&
+                currentSnapshot?.manualStateKey == null
+            ) {
+                areaKernelRepository.clearSnapshot(
+                    areaId = areaId,
+                    date = today,
+                )
+            } else {
+                areaKernelRepository.upsertSnapshot(
+                    snapshot = AreaSnapshot(
+                        areaId = areaId,
+                        date = today,
+                        manualScore = currentSnapshot?.manualScore,
+                        manualStateKey = currentSnapshot?.manualStateKey,
+                        manualNote = normalizedNote,
+                        confidence = currentSnapshot?.confidence,
+                        freshnessAt = now,
+                    ),
+                )
+            }
+        }
+    }
+
+    fun clearSnapshot(areaId: String) {
+        viewModelScope.launch {
+            areaKernelRepository.clearSnapshot(
                 areaId = areaId,
-                date = todayIso,
-                manualScore = score,
+                date = today,
             )
         }
     }
@@ -119,7 +228,7 @@ class AreaStudioViewModel(
         areaId: String,
         cadence: String,
     ) {
-        updateProfile(areaId) { it.copy(cadence = cadence) }
+        updateProfile(areaId) { it.copy(cadenceKey = cadence) }
     }
 
     fun setIntensity(
@@ -150,6 +259,20 @@ class AreaStudioViewModel(
         }
     }
 
+    fun promoteTrack(
+        areaId: String,
+        track: String,
+    ) {
+        updateProfile(areaId) { current ->
+            val reorderedTracks = linkedSetOf(track).apply {
+                current.selectedTracks
+                    .filterNot { it == track }
+                    .forEach(::add)
+            }
+            current.copy(selectedTracks = reorderedTracks)
+        }
+    }
+
     fun setRemindersEnabled(
         areaId: String,
         enabled: Boolean,
@@ -171,54 +294,115 @@ class AreaStudioViewModel(
         updateProfile(areaId) { it.copy(experimentsEnabled = enabled) }
     }
 
-    private fun updateProfile(
+    fun setLageMode(
         areaId: String,
-        transform: (LifeAreaProfile) -> LifeAreaProfile,
+        value: String,
     ) {
-        val blueprint = startAreaBlueprint(areaId) ?: return
-        val current = state.value.areas[areaId] ?: return
-        viewModelScope.launch {
-            lifeAreaProfileRepository.saveProfile(
-                transform(
-                    LifeAreaProfile(
-                        areaId = areaId,
-                        cadence = current.cadence,
-                        intensity = current.intensity,
-                        signalBlend = current.signalBlend,
-                        selectedTracks = current.selectedTracks.ifEmpty { blueprint.tracks.take(2).toSet() },
-                        remindersEnabled = current.remindersEnabled,
-                        reviewEnabled = current.reviewEnabled,
-                        experimentsEnabled = current.experimentsEnabled,
-                    ),
+        updateProfile(areaId) {
+            it.copy(
+                authoringConfig = it.authoringConfig.copy(
+                    lageMode = AreaLageMode.fromPersistedValue(value),
                 ),
             )
         }
+    }
+
+    fun setDirectionMode(
+        areaId: String,
+        value: String,
+    ) {
+        updateProfile(areaId) {
+            it.copy(
+                authoringConfig = it.authoringConfig.copy(
+                    directionMode = AreaDirectionMode.fromPersistedValue(value),
+                ),
+            )
+        }
+    }
+
+    fun setSourcesMode(
+        areaId: String,
+        value: String,
+    ) {
+        updateProfile(areaId) {
+            it.copy(
+                authoringConfig = it.authoringConfig.copy(
+                    sourcesMode = AreaSourcesMode.fromPersistedValue(value),
+                ),
+            )
+        }
+    }
+
+    fun setFlowProfile(
+        areaId: String,
+        value: String,
+    ) {
+        updateProfile(areaId) {
+            it.copy(
+                authoringConfig = it.authoringConfig.copy(
+                    flowProfile = AreaFlowProfile.fromPersistedValue(value),
+                ),
+            )
+        }
+    }
+
+    fun setComplexityLevel(
+        areaId: String,
+        value: String,
+    ) {
+        updateProfile(areaId) {
+            it.copy(
+                authoringConfig = it.authoringConfig.copy(
+                    complexityLevel = AreaComplexityLevel.entries.firstOrNull {
+                        it.name.equals(value, ignoreCase = true)
+                    } ?: AreaComplexityLevel.BASIC,
+                ),
+            )
+        }
+    }
+
+    fun setVisibilityLevel(
+        areaId: String,
+        value: String,
+    ) {
+        updateProfile(areaId) {
+            it.copy(
+                authoringConfig = it.authoringConfig.copy(
+                    visibilityLevel = AreaVisibilityLevel.fromPersistedValue(value),
+                ),
+            )
+        }
+    }
+
+    private fun updateProfile(
+        areaId: String,
+        transform: (AreaInstance) -> AreaInstance,
+    ) {
+        val current = currentInstance(areaId) ?: return
+        viewModelScope.launch {
+            areaKernelRepository.updateActiveInstance(
+                transform(current),
+            )
+        }
+    }
+
+    private fun currentInstance(areaId: String): AreaInstance? {
+        return activeInstances.value.firstOrNull { it.areaId == areaId }
+    }
+
+    private fun currentSnapshot(areaId: String): AreaSnapshot? {
+        return todaySnapshots.value.firstOrNull { it.areaId == areaId }
     }
 
     companion object {
         fun factory(appContainer: AppContainer): ViewModelProvider.Factory = viewModelFactory {
             initializer {
                 AreaStudioViewModel(
-                    lifeWheelRepository = appContainer.lifeWheelRepository,
-                    lifeAreaProfileRepository = appContainer.lifeAreaProfileRepository,
+                    areaKernelRepository = appContainer.areaKernelRepository,
+                    planRepository = appContainer.planRepository,
                     clock = appContainer.clock,
                 )
             }
         }
     }
-}
-
-private fun defaultProfile(
-    blueprint: StartAreaBlueprint,
-): LifeAreaProfile {
-    return LifeAreaProfile(
-        areaId = blueprint.id,
-        cadence = "adaptive",
-        intensity = 3,
-        signalBlend = 60,
-        selectedTracks = blueprint.tracks.take(2).toSet(),
-        remindersEnabled = false,
-        reviewEnabled = true,
-        experimentsEnabled = false,
-    )
 }
