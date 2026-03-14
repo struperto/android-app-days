@@ -1,0 +1,323 @@
+package com.struperto.androidappdays
+
+import android.content.Context
+import androidx.room.Room
+import com.struperto.androidappdays.bootstrap.AppBootstrapCoordinator
+import com.struperto.androidappdays.bootstrap.DefaultAppBootstrapCoordinator
+import com.struperto.androidappdays.data.local.MIGRATION_8_9
+import com.struperto.androidappdays.data.local.MIGRATION_9_10
+import com.struperto.androidappdays.data.local.MIGRATION_10_11
+import com.struperto.androidappdays.data.local.MIGRATION_11_12
+import com.struperto.androidappdays.data.local.MIGRATION_12_13
+import com.struperto.androidappdays.data.local.MIGRATION_13_14
+import com.struperto.androidappdays.data.local.MIGRATION_14_15
+import com.struperto.androidappdays.data.local.MIGRATION_15_16
+import com.struperto.androidappdays.data.local.SingleDatabase
+import com.struperto.androidappdays.data.repository.AreaSourceBindingRepository
+import com.struperto.androidappdays.data.repository.AreaWebFeedSourceRepository
+import com.struperto.androidappdays.data.repository.CalendarSignalRepository
+import com.struperto.androidappdays.data.repository.CaptureRepository
+import com.struperto.androidappdays.data.repository.DeviceCalendarSignalRepository
+import com.struperto.androidappdays.data.repository.GoalRepository
+import com.struperto.androidappdays.data.repository.HealthConnectRepository
+import com.struperto.androidappdays.data.repository.HourSlotEntryRepository
+import com.struperto.androidappdays.data.repository.LearningEventRepository
+import com.struperto.androidappdays.data.repository.AreaKernelRepository
+import com.struperto.androidappdays.data.repository.LifeAreaProfileRepository
+import com.struperto.androidappdays.data.repository.LocalSignalRepository
+import com.struperto.androidappdays.data.repository.LocalSourceCapabilityRepository
+import com.struperto.androidappdays.data.repository.LifeWheelRepository
+import com.struperto.androidappdays.data.repository.NotificationSignalRepository
+import com.struperto.androidappdays.data.repository.ObservationRepository
+import com.struperto.androidappdays.data.repository.PlanRepository
+import com.struperto.androidappdays.data.repository.RoomAreaWebFeedSourceRepository
+import com.struperto.androidappdays.data.repository.RoomGoalRepository
+import com.struperto.androidappdays.data.repository.RoomHourSlotEntryRepository
+import com.struperto.androidappdays.data.repository.RoomLifeWheelRepository
+import com.struperto.androidappdays.data.repository.RoomCaptureRepository
+import com.struperto.androidappdays.data.repository.RoomLearningEventRepository
+import com.struperto.androidappdays.data.repository.RoomLifeAreaProfileRepository
+import com.struperto.androidappdays.data.repository.RoomNotificationSignalRepository
+import com.struperto.androidappdays.data.repository.RoomObservationRepository
+import com.struperto.androidappdays.data.repository.RoomPlanRepository
+import com.struperto.androidappdays.data.repository.RoomAreaSourceBindingRepository
+import com.struperto.androidappdays.data.repository.RoomBackedAreaKernelRepository
+import com.struperto.androidappdays.data.repository.RoomUserFingerprintRepository
+import com.struperto.androidappdays.data.repository.RoomVorhabenRepository
+import com.struperto.androidappdays.data.repository.SignalRepository
+import com.struperto.androidappdays.data.repository.SourceCapabilityRepository
+import com.struperto.androidappdays.data.repository.UserFingerprintRepository
+import com.struperto.androidappdays.data.repository.VorhabenRepository
+import com.struperto.androidappdays.data.repository.AndroidHealthConnectRepository
+import com.struperto.androidappdays.domain.service.EvaluationEngineV0
+import com.struperto.androidappdays.domain.service.HomeDomainHintProjector
+import com.struperto.androidappdays.domain.service.HypothesisEngineV0
+import com.struperto.androidappdays.domain.service.LocalEvaluationEngineV0
+import com.struperto.androidappdays.domain.service.LocalHomeDomainHintProjector
+import com.struperto.androidappdays.domain.service.LocalHypothesisEngineV0
+import com.struperto.androidappdays.domain.service.LocalObservationSyncService
+import com.struperto.androidappdays.domain.service.ObservationSyncService
+import com.struperto.androidappdays.feature.content.AreaContentRuntimeRepository
+import com.struperto.androidappdays.feature.content.LocalAreaContentRuntimeRepository
+import com.struperto.androidappdays.feature.single.home.DayModelEngine
+import com.struperto.androidappdays.feature.single.home.LocalNewsRuntimeRepository
+import com.struperto.androidappdays.feature.single.home.LocalDayModelEngine
+import com.struperto.androidappdays.feature.single.home.NewsRuntimeRepository
+import com.struperto.androidappdays.feature.single.home.LocalSollEngine
+import com.struperto.androidappdays.feature.single.home.SollEngine
+import com.struperto.androidappdays.feature.start.LocalWebFeedConnector
+import com.struperto.androidappdays.feature.start.LocalWebFeedSyncCoordinator
+import com.struperto.androidappdays.feature.start.WebFeedConnector
+import com.struperto.androidappdays.feature.start.WebFeedSyncCoordinator
+import com.struperto.androidappdays.testing.MvpPersonaScenarioRunner
+import java.time.Clock
+
+class AppContainer(context: Context) {
+    val clock: Clock = Clock.systemDefaultZone()
+
+    private val database: SingleDatabase by lazy {
+        Room.databaseBuilder(
+            context.applicationContext,
+            SingleDatabase::class.java,
+            "single-v1.db",
+        ).addMigrations(
+            MIGRATION_8_9,
+            MIGRATION_9_10,
+            MIGRATION_10_11,
+            MIGRATION_11_12,
+            MIGRATION_12_13,
+            MIGRATION_13_14,
+            MIGRATION_14_15,
+            MIGRATION_15_16,
+        ).build()
+    }
+
+    val lifeWheelRepository: LifeWheelRepository by lazy {
+        RoomLifeWheelRepository(
+            database = database,
+            lifeWheelDao = database.lifeWheelDao(),
+            areaKernelDao = database.areaKernelDao(),
+            clock = clock,
+        )
+    }
+
+    val lifeAreaProfileRepository: LifeAreaProfileRepository by lazy {
+        RoomLifeAreaProfileRepository(
+            areaKernelDao = database.areaKernelDao(),
+            clock = clock,
+        )
+    }
+
+    val areaKernelRepository: AreaKernelRepository by lazy {
+        RoomBackedAreaKernelRepository(
+            lifeWheelRepository = lifeWheelRepository,
+            lifeAreaProfileRepository = lifeAreaProfileRepository,
+            areaKernelDao = database.areaKernelDao(),
+        )
+    }
+
+    val captureRepository: CaptureRepository by lazy {
+        RoomCaptureRepository(
+            captureItemDao = database.captureItemDao(),
+            clock = clock,
+        )
+    }
+
+    val areaContentRuntimeRepository: AreaContentRuntimeRepository by lazy {
+        LocalAreaContentRuntimeRepository(
+            areaKernelRepository = areaKernelRepository,
+            captureRepository = captureRepository,
+            clock = clock,
+        )
+    }
+
+    val webFeedConnector: WebFeedConnector by lazy {
+        LocalWebFeedConnector()
+    }
+
+    val areaWebFeedSourceRepository: AreaWebFeedSourceRepository by lazy {
+        RoomAreaWebFeedSourceRepository(
+            dao = database.areaWebFeedSourceDao(),
+            clock = clock,
+        )
+    }
+
+    val newsRuntimeRepository: NewsRuntimeRepository by lazy {
+        LocalNewsRuntimeRepository(
+            areaKernelRepository = areaKernelRepository,
+            areaWebFeedSourceRepository = areaWebFeedSourceRepository,
+            clock = clock,
+        )
+    }
+
+    val webFeedSyncCoordinator: WebFeedSyncCoordinator by lazy {
+        LocalWebFeedSyncCoordinator(
+            appContext = context.applicationContext,
+            captureRepository = captureRepository,
+            webFeedSourceRepository = areaWebFeedSourceRepository,
+            webFeedConnector = webFeedConnector,
+            clock = clock,
+        )
+    }
+
+    val calendarSignalRepository: CalendarSignalRepository by lazy {
+        DeviceCalendarSignalRepository(
+            context = context.applicationContext,
+        )
+    }
+
+    val vorhabenRepository: VorhabenRepository by lazy {
+        RoomVorhabenRepository(
+            vorhabenDao = database.vorhabenDao(),
+            clock = clock,
+        )
+    }
+
+    val planRepository: PlanRepository by lazy {
+        RoomPlanRepository(
+            planItemDao = database.planItemDao(),
+            vorhabenDao = database.vorhabenDao(),
+            clock = clock,
+        )
+    }
+
+    val notificationSignalRepository: NotificationSignalRepository by lazy {
+        RoomNotificationSignalRepository(
+            dao = database.notificationSignalDao(),
+            clock = clock,
+        )
+    }
+
+    val learningEventRepository: LearningEventRepository by lazy {
+        RoomLearningEventRepository(
+            dao = database.learningEventDao(),
+            clock = clock,
+        )
+    }
+
+    val userFingerprintRepository: UserFingerprintRepository by lazy {
+        RoomUserFingerprintRepository(
+            dao = database.userFingerprintDao(),
+            lifeWheelDao = database.lifeWheelDao(),
+            learningEventDao = database.learningEventDao(),
+            clock = clock,
+        )
+    }
+
+    val signalRepository: SignalRepository by lazy {
+        LocalSignalRepository(
+            calendarSignalRepository = calendarSignalRepository,
+            notificationSignalRepository = notificationSignalRepository,
+            captureRepository = captureRepository,
+            vorhabenRepository = vorhabenRepository,
+            planRepository = planRepository,
+        )
+    }
+
+    val goalRepository: GoalRepository by lazy {
+        RoomGoalRepository(
+            database = database,
+            goalDao = database.domainGoalDao(),
+            catalogDao = database.domainCatalogDao(),
+            clock = clock,
+        )
+    }
+
+    val observationRepository: ObservationRepository by lazy {
+        RoomObservationRepository(
+            dao = database.observationEventDao(),
+            clock = clock,
+        )
+    }
+
+    val hourSlotEntryRepository: HourSlotEntryRepository by lazy {
+        RoomHourSlotEntryRepository(
+            dao = database.hourSlotEntryDao(),
+            clock = clock,
+        )
+    }
+
+    val healthConnectRepository: HealthConnectRepository by lazy {
+        AndroidHealthConnectRepository(
+            context = context.applicationContext,
+        )
+    }
+
+    val sourceCapabilityRepository: SourceCapabilityRepository by lazy {
+        LocalSourceCapabilityRepository(
+            context = context.applicationContext,
+            preferenceDao = database.sourcePreferenceDao(),
+            healthConnectRepository = healthConnectRepository,
+            clock = clock,
+        )
+    }
+
+    val areaSourceBindingRepository: AreaSourceBindingRepository by lazy {
+        RoomAreaSourceBindingRepository(
+            dao = database.areaSourceBindingDao(),
+            clock = clock,
+        )
+    }
+
+    val appBootstrapCoordinator: AppBootstrapCoordinator by lazy {
+        DefaultAppBootstrapCoordinator(
+            areaKernelRepository = areaKernelRepository,
+            goalRepository = goalRepository,
+            sourceCapabilityRepository = sourceCapabilityRepository,
+        )
+    }
+
+    val observationSyncService: ObservationSyncService by lazy {
+        LocalObservationSyncService(
+            clock = clock,
+            observationRepository = observationRepository,
+            sourceCapabilityRepository = sourceCapabilityRepository,
+            healthConnectRepository = healthConnectRepository,
+            calendarSignalRepository = calendarSignalRepository,
+            notificationSignalRepository = notificationSignalRepository,
+        )
+    }
+
+    val evaluationEngineV0: EvaluationEngineV0 by lazy {
+        LocalEvaluationEngineV0()
+    }
+
+    val hypothesisEngineV0: HypothesisEngineV0 by lazy {
+        LocalHypothesisEngineV0()
+    }
+
+    val homeDomainHintProjector: HomeDomainHintProjector by lazy {
+        LocalHomeDomainHintProjector()
+    }
+
+    val mvpPersonaScenarioRunner: MvpPersonaScenarioRunner by lazy {
+        MvpPersonaScenarioRunner(
+            clock = clock,
+            userFingerprintRepository = userFingerprintRepository,
+            goalRepository = goalRepository,
+            observationRepository = observationRepository,
+            hourSlotEntryRepository = hourSlotEntryRepository,
+            sourceCapabilityRepository = sourceCapabilityRepository,
+            dayModelEngine = dayModelEngine,
+            evaluationEngineV0 = evaluationEngineV0,
+            hypothesisEngineV0 = hypothesisEngineV0,
+            homeDomainHintProjector = homeDomainHintProjector,
+        )
+    }
+
+    val dayModelEngine: DayModelEngine by lazy {
+        LocalDayModelEngine()
+    }
+
+    val sollEngine: SollEngine by lazy {
+        LocalSollEngine()
+    }
+
+    suspend fun ensureAppBootstrapped() {
+        appBootstrapCoordinator.ensureBootstrapped()
+    }
+
+    suspend fun seedDefaults() {
+        ensureAppBootstrapped()
+    }
+}
